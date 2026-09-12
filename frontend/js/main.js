@@ -128,7 +128,10 @@ function showView(viewName) {
             typeof loadAnalytics === "function" && loadAnalytics();
             typeof loadExpiryReport === "function" && loadExpiryReport();
         },
-        tax: () => typeof loadTaxReport === "function" && loadTaxReport(),
+        tax: () => {
+              typeof loadTaxReport === "function" && loadTaxReport();
+              typeof loadTaxArchive === "function" && loadTaxArchive();
+          },
         receipts: () => typeof loadReceiptHistory === "function" && loadReceiptHistory(),
         purchaseOrders: () => typeof loadPurchaseOrders === "function" && loadPurchaseOrders(),
         settings: () => {

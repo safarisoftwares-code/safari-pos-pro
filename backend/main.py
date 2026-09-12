@@ -9,8 +9,10 @@ from routers import (
     auth, products, sales, customers, reports, users,
     backup, settings, purchase_orders, analytics, mpesa, tax,
 )
+from services import tax_archiver
 import os
 import sys
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -131,6 +133,57 @@ async def startup_event():
         conn.close()
     except Exception as e:
         print(f"[startup] settings setup warning: {e}")
+
+    # ------------------------------------------------------------------
+    #  Tax Ledger v2 - daily auto-archive (once per 24 hours)
+    # ------------------------------------------------------------------
+    try:
+        import time
+        from services import tax_archiver
+
+        last_run_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "logs",
+            ".last_archive_run",
+        )
+        os.makedirs(os.path.dirname(last_run_file), exist_ok=True)
+
+        should_run = True
+        if os.path.exists(last_run_file):
+            try:
+                with open(last_run_file, "r") as f:
+                    last_ts = float(f.read().strip())
+                if time.time() - last_ts < 86400:  # 24 hours
+                    should_run = False
+            except (ValueError, OSError):
+                pass
+
+        if should_run:
+            result = tax_archiver.run_daily_maintenance(retention_months=12)
+            with open(last_run_file, "w") as f:
+                f.write(str(time.time()))
+
+            log_file = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "logs",
+                "tax_archive.log",
+            )
+            with open(log_file, "a", encoding="utf-8") as lf:
+                lf.write(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"cutoff={result['cutoff']} "
+                    f"months={result['archived_months']} "
+                    f"moved={result['rows_moved']} "
+                    f"deleted={result['rows_deleted']}\n"
+                )
+
+            if result["archived_months"]:
+                print(
+                    f"[tax-archive] Archived {len(result['archived_months'])} "
+                    f"month(s), moved {result['rows_moved']} row(s)"
+                )
+    except Exception as e:
+        print(f"[tax-archive] WARNING: {e}")
 
     # Ensure admin exists
     db = SessionLocal()

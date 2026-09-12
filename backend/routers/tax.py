@@ -78,3 +78,79 @@ async def tax_transactions(current_user=Depends(get_current_user), db: Session =
         }
         for r in rows
     ]
+
+
+
+# ============================================================
+#  Tax Ledger v2 - Archive endpoints
+# ============================================================
+
+from services import tax_archiver
+
+
+@router.get("/archive/summary")
+async def archive_summary(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """List all archived months with totals."""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return tax_archiver.get_archive_summary()
+
+
+@router.get("/archive/full")
+async def archive_full(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Combined live + archived + purged totals."""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return tax_archiver.get_full_tax_summary()
+
+
+@router.get("/archive/purgeable")
+async def archive_purgeable(retention_years: int = 5, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Months old enough to purge (default 5 years retention)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can view purgeable months")
+    return {
+        "retention_years": retention_years,
+        "months": tax_archiver.list_purgeable(retention_years),
+    }
+
+
+@router.post("/archive/purge/{month}")
+async def archive_purge(month: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Purge one archived month. Admin only. Writes permanent manifest."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can purge archives")
+
+    # Validate format
+    if len(month) != 7 or month[4] != "-":
+        raise HTTPException(status_code=400, detail="Invalid month format (use YYYY-MM)")
+
+    # Check purgeability
+    purgeable = tax_archiver.list_purgeable(5)
+    purgeable_months = [p["month"] for p in purgeable]
+    if month not in purgeable_months:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Month {month} is not old enough to purge (need 5 years retention).",
+        )
+
+    result = tax_archiver.purge_month(month, current_user.name)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Purge failed"))
+    return result
+
+
+@router.get("/archive/purge-history")
+async def archive_purge_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Permanent record of every purge ever done."""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return tax_archiver.get_purge_history()
+
+
+@router.get("/archive/verify")
+async def archive_verify(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Verify SHA-256 chain integrity of the archive."""
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return tax_archiver.verify_chain()

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.6">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.8">
 </head>
 <body>
     <div class="dashboard-container">
@@ -130,6 +130,35 @@
                     <h3 class="card-title">Recent Tax Transactions</h3>
                     <div class="data-table"><table style="width:100%"><thead><tr><th>Receipt</th><th>Date</th><th>Product</th><th>Qty</th><th>Tax Rate</th><th>Tax Amount</th><th>Payment</th><th>Cashier</th></tr></thead><tbody id="taxTableBody"></tbody></table></div>
                 </div>
+
+                <div class="card">
+                    <h3 class="card-title">Tax Ledger v2 &mdash; Archive Summary</h3>
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:15px">
+                        <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Live (last 12 mo)</h3><p style="font-size:18px;font-weight:bold;color:#2e7d32" id="taxLiveTotal">KSh 0.00</p></div>
+                        <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Archived</h3><p style="font-size:18px;font-weight:bold;color:#8b4513" id="taxArchivedTotal">KSh 0.00</p></div>
+                        <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Purged</h3><p style="font-size:18px;font-weight:bold;color:#666" id="taxPurgedTotal">KSh 0.00</p></div>
+                        <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Grand Total</h3><p style="font-size:18px;font-weight:bold;color:#d2691e" id="taxGrandTotal">KSh 0.00</p></div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-bottom:15px">
+                        <button onclick="loadTaxArchive()" class="btn btn-primary" style="width:auto;padding:8px 16px">Refresh</button>
+                        <button onclick="verifyTaxChain()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#0088cc;color:white;border:none;border-radius:5px;cursor:pointer">Verify Integrity</button>
+                        <button onclick="loadPurgeable()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer">Check Purgeable</button>
+                        <button onclick="loadPurgeHistory()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#666;color:white;border:none;border-radius:5px;cursor:pointer">Purge History</button>
+                    </div>
+                    <div id="taxChainResult" style="margin-bottom:15px"></div>
+                    <h4 style="color:#8b4513;font-size:13px;margin-bottom:8px">Archived Months</h4>
+                    <div class="data-table"><table style="width:100%"><thead><tr><th>Month</th><th>Rows</th><th>Total Tax</th><th>Archived At</th><th>SHA-256</th></tr></thead><tbody id="taxArchiveTableBody"><tr><td colspan="5">No archived months yet</td></tr></tbody></table></div>
+                </div>
+
+                <div class="card" id="purgeableCard" style="display:none">
+                    <h3 class="card-title" style="color:#d32f2f">Purgeable Months (older than 5 years)</h3>
+                    <div id="purgeableList"></div>
+                </div>
+
+                <div class="card" id="purgeHistoryCard" style="display:none">
+                    <h3 class="card-title">Permanent Purge History</h3>
+                    <div class="data-table"><table style="width:100%"><thead><tr><th>Month</th><th>Rows</th><th>Total Tax</th><th>SHA-256</th><th>Purged By</th><th>Purged At</th></tr></thead><tbody id="purgeHistoryTableBody"></tbody></table></div>
+                </div>
             </div>
 
             <!-- ============================== RECEIPTS ============================== -->
@@ -183,11 +212,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=1.6"></script>
-    <script src="/static/js/app.js?v=1.6"></script>
-    <script src="/static/js/main.js?v=1.6"></script>
-    <script src="/static/js/analytics.js?v=1.6"></script>
-    <script src="/static/js/tax.js?v=1.6"></script>
+    <script src="/static/js/auth.js?v=1.8"></script>
+    <script src="/static/js/app.js?v=1.8"></script>
+    <script src="/static/js/main.js?v=1.8"></script>
+    <script src="/static/js/analytics.js?v=1.8"></script>
+    <script src="/static/js/tax.js?v=1.8"></script>
 
     <!-- ============================== MODALS ============================== -->
 
