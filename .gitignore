@@ -68,3 +68,10 @@ test_*.db
 !backups/.gitkeep
 !database/.gitkeep
 !logs/.gitkeep
+
+# Server runtime files
+logs/server.pid
+logs/server.log
+
+# Edge app-mode dedicated profile
+.edge-profile/

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
@@ -163,6 +163,29 @@ async def startup_event():
 # ------------------------------------------------------------
 #  Entrypoint
 # ------------------------------------------------------------
+
+
+# ------------------------------------------------------------
+#  Shutdown endpoint — called by the app when the user closes it
+#  Only accepts from localhost
+# ------------------------------------------------------------
+from fastapi import Request
+import signal
+
+@app.post("/__shutdown__")
+async def shutdown(request: Request):
+    client_host = request.client.host if request.client else ""
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Only localhost")
+
+    import threading, os as _os
+    def _delayed_exit():
+        import time
+        time.sleep(0.5)
+        _os._exit(0)
+    threading.Thread(target=_delayed_exit, daemon=True).start()
+    return {"message": "Shutting down"}
+
 if __name__ == "__main__":
     import uvicorn
     import io

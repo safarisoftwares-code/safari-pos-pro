@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Safari POS Pro</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=1.0">
+    <style>
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px white inset !important;
+            box-shadow: 0 0 0 1000px white inset !important;
+            -webkit-text-fill-color: #2c3e50 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-logo">
+                <h1>SAFARI POS PRO</h1>
+                <p>Safari Softwares &mdash; From Vision to Version</p>
+            </div>
+
+            <form id="loginForm" autocomplete="off" novalidate>
+                <div class="form-group">
+                    <label>Email or Phone Number</label>
+                    <input
+                        type="text"
+                        id="email"
+                        name="email"
+                        required
+                        placeholder="Enter your email or phone"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <div style="position: relative;">
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            placeholder="Enter your password"
+                            autocomplete="new-password"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            style="padding-right: 60px;">
+                        <button
+                            type="button"
+                            onclick="togglePassword('password', this)"
+                            style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 14px;">
+                            Show
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">Login</button>
+
+                <div style="text-align:center;margin-top:15px">
+                    <a href="#" onclick="openRecoveryModal(); return false;"
+                       style="color:#8b4513;font-size:13px;text-decoration:underline">
+                        Forgot Admin Password?
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/auth.js?v=1.0"></script>
+    <script>
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (input.type === "password") {
+                input.type = "text";
+                button.textContent = "Hide";
+            } else {
+                input.type = "password";
+                button.textContent = "Show";
+            }
+        }
+
+        document.getElementById("loginForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const emailInput = document.getElementById("email");
+            const passwordInput = document.getElementById("password");
+            const loginBtn = document.getElementById("loginBtn");
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!email || !password) {
+                alert("Please enter both email/phone and password.");
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = "Logging in...";
+
+            try {
+                await authManager.login(email, password);
+                emailInput.value = "";
+                passwordInput.value = "";
+                window.location.href = "/";
+            } catch (error) {
+                alert("Login failed: " + error.message);
+                passwordInput.value = "";
+                emailInput.focus();
+                loginBtn.disabled = false;
+                loginBtn.textContent = "Login";
+            }
+        });
+    </script>
+
+    <div id="recoveryModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;justify-content:center;align-items:center;padding:20px">
+        <div style="background:white;padding:25px;border-radius:15px;width:100%;max-width:450px">
+            <h3 style="color:#8b4513;margin-bottom:15px">Password Recovery</h3>
+            <p style="font-size:12px;color:#666;margin-bottom:15px">
+                Enter your recovery code and the admin email or phone to reset the password.
+            </p>
+
+            <div class="form-group">
+                <label>Admin Email OR Phone</label>
+                <input type="text" id="recoveryEmail" placeholder="admin@example.com or 0712345678">
+            </div>
+
+            <div class="form-group">
+                <label>Recovery Code</label>
+                <input type="text" id="recoveryCode" placeholder="SAFARI-XXXX-XXXX-XXXX" style="text-transform:uppercase">
+            </div>
+
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="recoveryNewPass" placeholder="Minimum 6 characters">
+            </div>
+
+            <div style="display:flex;gap:10px">
+                <button onclick="submitRecovery()" class="btn btn-primary" style="flex:1">Reset Password</button>
+                <button onclick="document.getElementById('recoveryModal').style.display='none'" class="btn btn-danger" style="flex:1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function openRecoveryModal() {
+        document.getElementById("recoveryModal").style.display = "flex";
+    }
+
+    async function submitRecovery() {
+        const email = document.getElementById("recoveryEmail").value.trim();
+        const code = document.getElementById("recoveryCode").value.trim().toUpperCase();
+        const newPass = document.getElementById("recoveryNewPass").value;
+
+        if (!email || !code || !newPass) {
+            alert("All fields required!");
+            return;
+        }
+        if (newPass.length < 6) {
+            alert("Password must be at least 6 characters!");
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/v1/settings/reset-password-with-code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email, code: code, new_password: newPass })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || "Reset failed");
+            alert(data.message);
+            document.getElementById("recoveryModal").style.display = "none";
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
+    }
+    </script>
+
+
+
+</body>
+</html>

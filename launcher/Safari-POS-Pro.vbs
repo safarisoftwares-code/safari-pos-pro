@@ -1,16 +1,14 @@
 ' ============================================================
-'  Safari POS Pro - Main Launcher v2
-'  Starts server silently, opens splash in Edge app-mode,
-'  waits for the Edge window to close, then kills server.
+'  Safari POS Pro - Main Launcher v4
+'  Uses dedicated Edge --user-data-dir so we can track the
+'  app process and kill the server when the user closes it.
 ' ============================================================
 
 Option Explicit
 
-Dim WshShell, FSO, rootDir, launcherDir, splashPath, startBat, killBat, edgePath, cmd
-Dim edgeCmd, exitCode, i, found
-Dim WINDOW_TITLE
-
-WINDOW_TITLE = "Safari POS Pro - Loading..."
+Dim WshShell, FSO, rootDir, launcherDir, splashPath, startBat, killBat, edgePath
+Dim edgeProfile, edgeCmd, cmd, exitCode, i
+Dim objWMIService, colProcesses, proc, foundEdge, waited
 
 Set WshShell = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
@@ -20,6 +18,7 @@ rootDir = FSO.GetParentFolderName(launcherDir)
 splashPath = launcherDir & "\splash.html"
 startBat = launcherDir & "\start_server.bat"
 killBat = launcherDir & "\launcher_helpers.bat"
+edgeProfile = rootDir & "\.edge-profile"
 
 WshShell.CurrentDirectory = rootDir
 
@@ -54,51 +53,51 @@ If edgePath = "" Then
     WScript.Quit 1
 End If
 
-' ---------- Step 3: Open splash in Edge app-mode ----------
-' Use --start-maximized so it takes the screen
+' ---------- Step 3: Launch Edge with dedicated profile ----------
 edgeCmd = """" & edgePath & """ --app=""file:///" & Replace(splashPath, "\", "/") & """ " & _
+          "--user-data-dir=""" & edgeProfile & """ " & _
           "--start-maximized " & _
-          "--disable-features=msEdgeWelcomePage,msEdgeSidebar,msEdgeShoppingAssistant " & _
           "--no-first-run --no-default-browser-check"
 
-' Launch Edge (do NOT wait ? Edge detaches)
 WshShell.Run edgeCmd, 1, False
 
-' Give Edge a moment to create its window
-WScript.Sleep 2500
+' ---------- Step 4: Wait for Edge process to appear ----------
+Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
 
-' Force Edge window to foreground
-On Error Resume Next
-found = False
-For i = 1 To 10
-    If WshShell.AppActivate(WINDOW_TITLE) Then
-        found = True
-        Exit For
-    End If
-    WScript.Sleep 500
-Next
-On Error GoTo 0
-
-' ---------- Step 4: Wait for Edge window to close ----------
-' Poll every 2 seconds. AppActivate returns True if window exists.
-Dim stillOpen, waited
-stillOpen = True
+foundEdge = False
 waited = 0
-Do While stillOpen
-    WScript.Sleep 2000
-    waited = waited + 2
-    On Error Resume Next
-    stillOpen = WshShell.AppActivate(WINDOW_TITLE)
-    On Error GoTo 0
-    ' Safety: if we somehow lose the window reference but Edge is running,
-    ' keep checking up to 8 hours (28800s), then kill anyway
-    If waited > 28800 Then
-        stillOpen = False
-    End If
+Do While Not foundEdge And waited < 30
+    WScript.Sleep 1000
+    waited = waited + 1
+    Set colProcesses = objWMIService.ExecQuery("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'msedge.exe'")
+    For Each proc In colProcesses
+        If InStr(proc.CommandLine, edgeProfile) > 0 Then
+            foundEdge = True
+            Exit For
+        End If
+    Next
 Loop
 
-' ---------- Step 5: Cleanup ----------
-cmd = "cmd /c """ & killBat & """ kill"
-WshShell.Run cmd, 0, True
+If Not foundEdge Then
+    WshShell.Run "cmd /c """ & killBat & """ kill", 0, True
+    WScript.Quit 1
+End If
+
+' ---------- Step 5: Wait for Edge process to exit ----------
+Do While True
+    WScript.Sleep 2000
+    foundEdge = False
+    Set colProcesses = objWMIService.ExecQuery("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'msedge.exe'")
+    For Each proc In colProcesses
+        If InStr(proc.CommandLine, edgeProfile) > 0 Then
+            foundEdge = True
+            Exit For
+        End If
+    Next
+    If Not foundEdge Then Exit Do
+Loop
+
+' ---------- Step 6: Kill server ----------
+WshShell.Run "cmd /c """ & killBat & """ kill", 0, True
 
 WScript.Quit 0
