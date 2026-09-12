@@ -2,7 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
-from database import Base, engine
+from database import Base, engine, SessionLocal
+from models import User
+from auth import hash_password
+from routers import (
+    auth, products, sales, customers, reports, users,
+    backup, settings, purchase_orders, analytics, mpesa, tax,
+)
 import os
 import sys
 from dotenv import load_dotenv
@@ -19,63 +25,159 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# PyInstaller EXE support
+# ------------------------------------------------------------
+#  Routers
+# ------------------------------------------------------------
+app.include_router(auth.router,            prefix="/api/v1/auth",             tags=["auth"])
+app.include_router(products.router,        prefix="/api/v1/products",         tags=["products"])
+app.include_router(sales.router,           prefix="/api/v1/sales",            tags=["sales"])
+app.include_router(customers.router,       prefix="/api/v1/customers",        tags=["customers"])
+app.include_router(reports.router,         prefix="/api/v1/reports",          tags=["reports"])
+app.include_router(users.router,           prefix="/api/v1/users",            tags=["users"])
+app.include_router(backup.router,          prefix="/api/v1/backup",           tags=["backup"])
+app.include_router(settings.router,        prefix="/api/v1/settings",         tags=["settings"])
+app.include_router(purchase_orders.router, prefix="/api/v1/purchase-orders",  tags=["purchase-orders"])
+app.include_router(analytics.router,       prefix="/api/v1/analytics",        tags=["analytics"])
+app.include_router(mpesa.router,           prefix="/api/v1/mpesa",            tags=["mpesa"])
+app.include_router(tax.router,             prefix="/api/v1/tax",              tags=["tax"])
+
+# ------------------------------------------------------------
+#  Frontend paths (with PyInstaller EXE support)
+# ------------------------------------------------------------
 if getattr(sys, "frozen", False):
     BASE_DIR = sys._MEIPASS
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-# Mount static folders if they exist
-if os.path.exists(os.path.join(FRONTEND_DIR, "css")):
-    app.mount("/static/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
-if os.path.exists(os.path.join(FRONTEND_DIR, "js")):
-    app.mount("/static/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
-if os.path.exists(os.path.join(FRONTEND_DIR, "assets")):
-    app.mount("/static/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
+# Mount static folders
+for sub in ("css", "js", "assets"):
+    folder = os.path.join(FRONTEND_DIR, sub)
+    if os.path.exists(folder):
+        app.mount(f"/static/{sub}", StaticFiles(directory=folder), name=sub)
 
+
+# ------------------------------------------------------------
+#  Frontend pages
+# ------------------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>Safari POS Pro</h1><p>index.html not found</p>", status_code=404)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def serve_login():
+    login_path = os.path.join(FRONTEND_DIR, "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path)
+    return HTMLResponse("<h1>Login</h1><p>login.html not found</p>", status_code=404)
+
+
+# ------------------------------------------------------------
+#  Health check (used by launcher splash)
+# ------------------------------------------------------------
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "version": "4.0.0", "app": "Safari POS Pro"}
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_root():
-    # Placeholder — replaced in Phase 1 with real index.html
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Safari POS Pro</title>
-        <style>
-            body { font-family: 'Segoe UI', sans-serif; background: #f5e6d3; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .box { background: white; padding: 40px 60px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; }
-            h1 { color: #8b4513; margin: 0 0 10px 0; }
-            p { color: #d2691e; font-style: italic; margin: 0; }
-            .status { margin-top: 20px; padding: 10px 20px; background: #2e7d32; color: white; border-radius: 8px; display: inline-block; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <div class="box">
-            <h1>SAFARI POS PRO</h1>
-            <p>From Vision to Version</p>
-            <div class="status">Backend is running — Phase 0.5 skeleton</div>
-        </div>
-    </body>
-    </html>
-    """
 
+# ------------------------------------------------------------
+#  Startup: create tables + ensure admin exists
+# ------------------------------------------------------------
+@app.on_event("startup")
+async def startup_event():
+    Base.metadata.create_all(bind=engine)
+
+    # Ensure tax_ledger table exists (raw SQL, same as v3.0 —
+    # Phase 2 will replace with proper 3-tier archive)
+    import sqlite3
+    from database import DB_PATH
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tax_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                receipt_no TEXT NOT NULL,
+                product_name TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                unit_price REAL NOT NULL,
+                tax_rate REAL NOT NULL,
+                tax_amount REAL NOT NULL,
+                payment_method TEXT NOT NULL,
+                cashier TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tax_created_at ON tax_ledger(created_at)")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[startup] tax_ledger setup warning: {e}")
+
+    # Ensure settings table exists
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[startup] settings setup warning: {e}")
+
+    # Ensure admin exists
+    db = SessionLocal()
+    try:
+        admin_email = os.getenv("ADMIN_EMAIL", "info@safarisoftwares.co.ke")
+        admin_password = os.getenv("ADMIN_PASSWORD", "info123")
+        admin_name = os.getenv("ADMIN_NAME", "Admin")
+
+        admin = db.query(User).filter(User.email == admin_email).first()
+        if not admin:
+            admin = User(
+                name=admin_name,
+                email=admin_email,
+                password_hash=hash_password(admin_password),
+                role="admin",
+            )
+            db.add(admin)
+            db.commit()
+            print("")
+            print("========================================")
+            print("  Safari POS Pro v4.0 started")
+            print(f"  Admin: {admin_email}")
+            print("  URL:   http://localhost:8001")
+            print("========================================")
+            print("")
+    finally:
+        db.close()
+
+
+# ------------------------------------------------------------
+#  Entrypoint
+# ------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     import io
-    import os
 
-    # Write PID file for the launcher to find us
-    pid_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "server.pid")
+    # Write PID file so the launcher can find us
+    pid_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "logs",
+        "server.pid",
+    )
     os.makedirs(os.path.dirname(pid_file), exist_ok=True)
     with open(pid_file, "w") as pf:
         pf.write(str(os.getpid()))
 
-    # Silence output if running without console (PyInstaller future-proofing)
+    # Silence if no console attached
     if sys.stdout is None:
         sys.stdout = io.StringIO()
     if sys.stderr is None:

@@ -1,0 +1,359 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from datetime import datetime
+from database import get_db, DB_PATH
+from models import Sale, SaleItem, Product, User
+from schemas import SaleCreate
+from auth import get_current_user
+import sqlite3
+
+router = APIRouter()
+
+
+def generate_receipt_no(db: Session) -> str:
+    today = datetime.now().strftime("%Y%m%d")
+    count = db.query(Sale).filter(Sale.receipt_no.like(f"INV-{today}-%")).count()
+    return f"INV-{today}-{count + 1:04d}"
+
+
+def _write_tax_ledger(receipt_no: str, items: list, payment_method: str, cashier: str, when: datetime):
+    """Write tax records for audit. Same format as v3.0 (Phase 2 will archive)."""
+    with sqlite3.connect(DB_PATH) as conn:
+        for item in items:
+            conn.execute(
+                """
+                INSERT INTO tax_ledger
+                (receipt_no, product_name, quantity, unit_price, tax_rate,
+                 tax_amount, payment_method, cashier, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    receipt_no,
+                    item["name"],
+                    item["quantity"],
+                    item["unit_price"],
+                    item["tax_rate"],
+                    item["tax_amount"],
+                    payment_method,
+                    cashier,
+                    when.strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            )
+        conn.commit()
+
+
+@router.post("/")
+async def create_sale(
+    sale_data: SaleCreate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    subtotal = 0.0
+    total_tax = 0.0
+    sale_items_data = []
+
+    # Validate + compute
+    for item in sale_data.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+        if product.stock < item.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for {product.name} (have {product.stock})",
+            )
+
+        line_total = item.quantity * item.unit_price
+
+        # INCLUSIVE tax: tax = price - (price / (1 + rate))
+        if product.tax_rate and product.tax_rate > 0:
+            rate = product.tax_rate / 100
+            line_tax = line_total - (line_total / (1 + rate))
+        else:
+            line_tax = 0.0
+
+        subtotal += line_total
+        total_tax += line_tax
+
+        sale_items_data.append({
+            "product": product,
+            "name": product.name,
+            "unit": product.unit,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "tax_rate": product.tax_rate or 0,
+            "tax_amount": line_tax,
+            "total_price": line_total,
+        })
+
+    discount = sale_data.discount or 0.0
+    total = subtotal - discount
+
+    # Create sale
+    sale = Sale(
+        receipt_no=generate_receipt_no(db),
+        customer_id=sale_data.customer_id,
+        cashier_id=current_user.id,
+        cashier_name=current_user.name,
+        subtotal=subtotal,
+        tax_amount=total_tax,
+        discount=discount,
+        total_amount=total,
+        payment_method=sale_data.payment_method,
+    )
+    db.add(sale)
+    db.commit()
+    db.refresh(sale)
+
+    # Create sale items + decrement stock
+    for item in sale_items_data:
+        db.add(SaleItem(
+            sale_id=sale.id,
+            product_id=item["product"].id,
+            quantity=item["quantity"],
+            unit_price=item["unit_price"],
+            tax_rate=item["tax_rate"],
+            tax_amount=item["tax_amount"],
+            total_price=item["total_price"],
+        ))
+        item["product"].stock -= item["quantity"]
+
+    db.commit()
+
+    # Write tax ledger
+    _write_tax_ledger(
+        sale.receipt_no,
+        sale_items_data,
+        sale.payment_method,
+        current_user.name,
+        sale.created_at,
+    )
+
+    return {
+        "id": sale.id,
+        "receipt_no": sale.receipt_no,
+        "subtotal": subtotal,
+        "tax_amount": total_tax,
+        "discount": discount,
+        "total_amount": total,
+        "payment_method": sale.payment_method,
+        "created_at": sale.created_at.isoformat(),
+        "items": [
+            {
+                "name": item["name"],
+                "unit": item["unit"],
+                "quantity": item["quantity"],
+                "unit_price": item["unit_price"],
+                "tax_rate": item["tax_rate"],
+                "tax_amount": item["tax_amount"],
+                "total_price": item["total_price"],
+            }
+            for item in sale_items_data
+        ],
+    }
+
+
+@router.get("/today")
+async def get_today_sales(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if current_user.role in ["admin", "manager"]:
+        sales = db.query(Sale).filter(Sale.created_at >= today).all()
+    else:
+        sales = db.query(Sale).filter(
+            Sale.created_at >= today,
+            Sale.cashier_id == current_user.id,
+        ).all()
+
+    return {
+        "count": len(sales),
+        "total_amount": sum(s.total_amount for s in sales),
+        "sales": [
+            {
+                "receipt_no": s.receipt_no,
+                "subtotal": s.subtotal,
+                "tax_amount": s.tax_amount,
+                "total_amount": s.total_amount,
+                "payment_method": s.payment_method,
+                "created_at": s.created_at.strftime("%H:%M:%S"),
+                "cashier": s.cashier_name or "Unknown",
+            }
+            for s in sales
+        ],
+    }
+
+
+@router.get("/all")
+async def get_all_sales(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    sales = db.query(Sale).order_by(Sale.created_at.desc()).limit(100).all()
+
+    return [
+        {
+            "receipt_no": s.receipt_no,
+            "subtotal": s.subtotal,
+            "tax_amount": s.tax_amount,
+            "total_amount": s.total_amount,
+            "payment_method": s.payment_method,
+            "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "cashier": s.cashier_name or "Unknown",
+        }
+        for s in sales
+    ]
+
+
+@router.get("/daily-close")
+async def daily_close(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if current_user.role in ["admin", "manager"]:
+        sales = db.query(Sale).filter(Sale.created_at >= today).all()
+    else:
+        sales = db.query(Sale).filter(
+            Sale.created_at >= today,
+            Sale.cashier_id == current_user.id,
+        ).all()
+
+    cash_total = sum(s.total_amount for s in sales if s.payment_method == "cash")
+    mpesa_total = sum(s.total_amount for s in sales if s.payment_method == "mpesa")
+    card_total = sum(s.total_amount for s in sales if s.payment_method == "card")
+    credit_total = sum(s.total_amount for s in sales if s.payment_method == "credit")
+    total = sum(s.total_amount for s in sales)
+
+    return {
+        "date": today.strftime("%Y-%m-%d"),
+        "total_transactions": len(sales),
+        "cash_total": cash_total,
+        "mpesa_total": mpesa_total,
+        "card_total": card_total,
+        "credit_total": credit_total,
+        "grand_total": total,
+    }
+
+
+@router.get("/history")
+async def receipt_history(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role in ["admin", "manager"]:
+        sales = db.query(Sale).order_by(Sale.created_at.desc()).limit(50).all()
+    else:
+        sales = db.query(Sale).filter(
+            Sale.cashier_id == current_user.id,
+        ).order_by(Sale.created_at.desc()).limit(50).all()
+
+    result = []
+    for sale in sales:
+        items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
+        result.append({
+            "receipt_no": sale.receipt_no,
+            "total_amount": sale.total_amount,
+            "subtotal": sale.subtotal,
+            "tax_amount": sale.tax_amount,
+            "discount": sale.discount,
+            "payment_method": sale.payment_method,
+            "created_at": sale.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "cashier": sale.cashier_name or "Deleted User",
+            "items": [
+                {
+                    "name": (
+                        db.query(Product).filter(Product.id == item.product_id).first().name
+                        if db.query(Product).filter(Product.id == item.product_id).first()
+                        else "Unknown"
+                    ),
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "tax_rate": item.tax_rate or 0,
+                    "tax_amount": item.tax_amount or 0,
+                    "total_price": item.total_price,
+                }
+                for item in items
+            ],
+        })
+    return result
+
+
+@router.get("/last-receipt")
+async def get_last_receipt(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role in ["admin", "manager"]:
+        sale = db.query(Sale).order_by(Sale.created_at.desc()).first()
+    else:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        sale = db.query(Sale).filter(
+            Sale.cashier_id == current_user.id,
+            Sale.created_at >= today,
+        ).order_by(Sale.created_at.desc()).first()
+
+    if not sale:
+        return {"message": "No receipt found"}
+
+    items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
+
+    return {
+        "receipt_no": sale.receipt_no,
+        "total_amount": sale.total_amount,
+        "subtotal": sale.subtotal,
+        "tax_amount": sale.tax_amount,
+        "discount": sale.discount,
+        "payment_method": sale.payment_method,
+        "created_at": sale.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "cashier": sale.cashier_name or "Deleted User",
+        "items": [
+            {
+                "name": (
+                    db.query(Product).filter(Product.id == item.product_id).first().name
+                    if db.query(Product).filter(Product.id == item.product_id).first()
+                    else "Unknown"
+                ),
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+            }
+            for item in items
+        ],
+    }
+
+
+@router.delete("/receipt/{receipt_no}")
+async def delete_receipt(
+    receipt_no: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can delete receipts")
+
+    sale = db.query(Sale).filter(Sale.receipt_no == receipt_no).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
+    db.delete(sale)
+    db.commit()
+
+    return {"message": f"Receipt {receipt_no} deleted. Tax records preserved."}
+
+
+@router.delete("/delete-before/{date}")
+async def delete_sales_before(
+    date: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can delete sales")
+
+    try:
+        cutoff = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    sales_to_delete = db.query(Sale).filter(Sale.created_at < cutoff).all()
+    count = len(sales_to_delete)
+
+    for sale in sales_to_delete:
+        db.query(SaleItem).filter(SaleItem.sale_id == sale.id).delete()
+        db.delete(sale)
+
+    db.commit()
+    return {"message": f"Deleted {count} receipts before {date}. Tax records preserved."}
