@@ -7,7 +7,7 @@ from models import User
 from auth import hash_password
 from routers import (
     auth, products, sales, customers, reports, users,
-    backup, settings, purchase_orders, analytics, mpesa, tax,
+    backup, settings, purchase_orders, analytics, mpesa, tax, printers,
 )
 from services import tax_archiver
 import os
@@ -28,6 +28,23 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------
+#  No-cache middleware (dev + client - prevents stale JS/CSS)
+#  The browser will always re-fetch static files on every load.
+#  Since files are served locally, this costs nothing.
+# ------------------------------------------------------------
+@app.middleware("http")
+async def no_cache_middleware(request, call_next):
+    response = await call_next(request)
+    # Only apply to HTML/CSS/JS — not to API JSON
+    path = request.url.path.lower()
+    if path.endswith((".html", ".css", ".js")) or path in ("/", "/login"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
+# ------------------------------------------------------------
 #  Routers
 # ------------------------------------------------------------
 app.include_router(auth.router,            prefix="/api/v1/auth",             tags=["auth"])
@@ -42,6 +59,7 @@ app.include_router(purchase_orders.router, prefix="/api/v1/purchase-orders",  ta
 app.include_router(analytics.router,       prefix="/api/v1/analytics",        tags=["analytics"])
 app.include_router(mpesa.router,           prefix="/api/v1/mpesa",            tags=["mpesa"])
 app.include_router(tax.router,             prefix="/api/v1/tax",              tags=["tax"])
+app.include_router(printers.router,        prefix="/api/v1/printers",         tags=["printers"])
 
 # ------------------------------------------------------------
 #  Frontend paths (with PyInstaller EXE support)

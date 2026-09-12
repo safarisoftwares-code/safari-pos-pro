@@ -138,6 +138,7 @@ function showView(viewName) {
             typeof loadSettings === "function" && loadSettings();
             typeof loadMpesaSettings === "function" && loadMpesaSettings();
             typeof loadExpirySettings === "function" && loadExpirySettings();
+            typeof loadPrinterSettings === "function" && loadPrinterSettings();
         },
     };
 
@@ -1736,3 +1737,122 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Restore file input — nothing to wire, handled in functions
 });
+
+
+
+// ============================================================
+//  Printer Configuration
+// ============================================================
+
+async function loadPrinters() {
+    const status = document.getElementById("printerStatus");
+    const receiptSel = document.getElementById("receiptPrinterSelect");
+    const reportSel = document.getElementById("reportPrinterSelect");
+
+    if (!receiptSel || !reportSel) return;
+
+    status.textContent = "Detecting printers...";
+    status.style.color = "#666";
+
+    try {
+        const data = await apiCall("/printers/available");
+
+        const printers = data.printers || [];
+        if (printers.length === 0) {
+            status.textContent = "No printers found on this machine.";
+            status.style.color = "#d32f2f";
+            return;
+        }
+
+        // Load current config to pre-select
+        let current = { receipt_printer: "", report_printer: "" };
+        try {
+            current = await apiCall("/printers/config");
+        } catch (e) { /* ignore */ }
+
+        // Build dropdowns
+        const buildOptions = (selected) =>
+            "<option value=\"\">-- Select Printer --</option>" +
+            printers.map(p =>
+                "<option value=\"" + p + "\"" + (p === selected ? " selected" : "") + ">" + p + "</option>"
+            ).join("");
+
+        receiptSel.innerHTML = buildOptions(current.receipt_printer);
+        reportSel.innerHTML = buildOptions(current.report_printer);
+
+        status.textContent = "Found " + printers.length + " printer(s). Default: " + (data.default || "none");
+        status.style.color = "#2e7d32";
+    } catch (e) {
+        status.textContent = "Error detecting printers: " + e.message;
+        status.style.color = "#d32f2f";
+    }
+}
+
+async function loadPrinterSettings() {
+    try {
+        const config = await apiCall("/printers/config");
+        const pdfInput = document.getElementById("pdfFallbackFolder");
+        const autoReceipt = document.getElementById("autoPrintReceipt");
+        const autoReport = document.getElementById("autoPrintReport");
+
+        if (pdfInput) pdfInput.value = config.pdf_fallback_folder || "";
+        if (autoReceipt) autoReceipt.checked = (config.auto_print_receipt !== "false");
+        if (autoReport) autoReport.checked = (config.auto_print_report === "true");
+
+        // Also populate dropdowns if printers are already configured
+        const receiptSel = document.getElementById("receiptPrinterSelect");
+        const reportSel = document.getElementById("reportPrinterSelect");
+        if (receiptSel && config.receipt_printer) {
+            if (!receiptSel.querySelector("option[value=\"" + config.receipt_printer + "\"]")) {
+                const opt = document.createElement("option");
+                opt.value = config.receipt_printer;
+                opt.textContent = config.receipt_printer;
+                receiptSel.appendChild(opt);
+            }
+            receiptSel.value = config.receipt_printer;
+        }
+        if (reportSel && config.report_printer) {
+            if (!reportSel.querySelector("option[value=\"" + config.report_printer + "\"]")) {
+                const opt = document.createElement("option");
+                opt.value = config.report_printer;
+                opt.textContent = config.report_printer;
+                reportSel.appendChild(opt);
+            }
+            reportSel.value = config.report_printer;
+        }
+    } catch (e) {
+        console.error("[loadPrinterSettings]", e);
+    }
+}
+
+async function savePrinterSettings() {
+    const receiptSel = document.getElementById("receiptPrinterSelect");
+    const reportSel = document.getElementById("reportPrinterSelect");
+    const pdfInput = document.getElementById("pdfFallbackFolder");
+    const autoReceipt = document.getElementById("autoPrintReceipt");
+    const autoReport = document.getElementById("autoPrintReport");
+    const status = document.getElementById("printerStatus");
+
+    const payload = {
+        receipt_printer: receiptSel ? receiptSel.value : "",
+        report_printer: reportSel ? reportSel.value : "",
+        pdf_fallback_folder: pdfInput ? pdfInput.value : "",
+        auto_print_receipt: autoReceipt && autoReceipt.checked ? "true" : "false",
+        auto_print_report: autoReport && autoReport.checked ? "true" : "false",
+    };
+
+    try {
+        await apiCall("/printers/config", "PUT", payload);
+        if (status) {
+            status.textContent = "Printer settings saved.";
+            status.style.color = "#2e7d32";
+        }
+        showSuccess("Printer settings saved");
+    } catch (e) {
+        if (status) {
+            status.textContent = "Save failed: " + e.message;
+            status.style.color = "#d32f2f";
+        }
+        showError(e);
+    }
+}

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.8">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
 </head>
 <body>
     <div class="dashboard-container">
@@ -196,6 +196,44 @@
                     <div class="form-group"><label>Receipt Footer</label><input type="text" id="receiptFooter"></div>
                     <button class="btn btn-primary" onclick="updateBusinessInfo()" style="width:auto;padding:10px 20px">Save Business Info</button>
                 </div>
+                <div class="card">
+                    <h3 class="card-title">Printer Configuration</h3>
+                    <p style="font-size:12px;color:#666;margin-bottom:15px">Choose which printer receives receipts and reports. Detection is automatic on Windows.</p>
+
+                    <div style="display:flex;gap:10px;margin-bottom:15px">
+                        <button onclick="loadPrinters()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#0088cc;color:white;border:none;border-radius:5px;cursor:pointer">Detect Printers</button>
+                        <button onclick="savePrinterSettings()" class="btn btn-primary" style="width:auto;padding:8px 16px">Save Printer Settings</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Receipt Printer</label>
+                        <select id="receiptPrinterSelect" style="width:100%;padding:10px;border:2px solid #ecf0f1;border-radius:8px">
+                            <option value="">Click "Detect Printers" first</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Report Printer</label>
+                        <select id="reportPrinterSelect" style="width:100%;padding:10px;border:2px solid #ecf0f1;border-radius:8px">
+                            <option value="">Click "Detect Printers" first</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>PDF Fallback Folder (used if printer offline)</label>
+                        <input type="text" id="pdfFallbackFolder" placeholder="C:\Users\<User>\Desktop\Safari-POS-Printed" style="width:100%">
+                    </div>
+
+                    <div class="form-group">
+                        <label><input type="checkbox" id="autoPrintReceipt" checked> Auto-print receipt after each sale</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="autoPrintReport"> Auto-print reports when generated</label>
+                    </div>
+
+                    <div id="printerStatus" style="font-size:12px;color:#666;margin-top:10px"></div>
+                </div>
+
                 <div class="card"><h3 class="card-title">Barcode Scanner Setup</h3><p style="font-size:13px;color:#666">USB scanners are plug-and-play.</p><div class="form-group"><label>Test Scanner</label><input type="text" id="scannerTest" placeholder="Scan here..." style="width:100%;max-width:400px"></div></div>
                 <div class="card"><h3 class="card-title">M-Pesa Configuration (Optional)</h3><p style="font-size:13px;color:#666">Cash works without M-Pesa.</p><div class="form-group"><label><input type="checkbox" id="mpesaEnabled"> Enable M-Pesa</label></div><div class="form-group"><label>Consumer Key</label><input type="text" id="mpesaConsumerKey"></div><div class="form-group"><label>Consumer Secret</label><input type="text" id="mpesaConsumerSecret"></div><div class="form-group"><label>Passkey</label><input type="text" id="mpesaPasskey"></div><div class="form-group"><label>Shortcode</label><input type="text" id="mpesaShortcode"></div><button class="btn btn-primary" onclick="saveMpesaSettings()" style="width:auto;padding:10px 20px">Save M-Pesa</button></div>
                 <div class="card"><h3 class="card-title">Expiry Protection</h3><div class="form-group"><label><input type="checkbox" id="blockExpired"> Block expired items</label></div><div class="form-group"><label><input type="checkbox" id="warnExpiring"> Warn expiring soon</label></div><button class="btn btn-primary" onclick="saveExpirySettings()" style="width:auto;padding:10px 20px">Save Expiry Settings</button></div>
@@ -212,11 +250,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=1.8"></script>
-    <script src="/static/js/app.js?v=1.8"></script>
-    <script src="/static/js/main.js?v=1.8"></script>
-    <script src="/static/js/analytics.js?v=1.8"></script>
-    <script src="/static/js/tax.js?v=1.8"></script>
+    <script src="/static/js/auth.js?v=2.0"></script>
+    <script src="/static/js/app.js?v=2.0"></script>
+    <script src="/static/js/main.js?v=2.0"></script>
+    <script src="/static/js/analytics.js?v=2.0"></script>
+    <script src="/static/js/tax.js?v=2.0"></script>
 
     <!-- ============================== MODALS ============================== -->
 
