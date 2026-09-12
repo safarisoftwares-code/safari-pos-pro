@@ -75,3 +75,6 @@ logs/server.log
 
 # Edge app-mode dedicated profile
 .edge-profile/
+
+# Runtime state files
+logs/.last_archive_run
