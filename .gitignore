@@ -78,3 +78,10 @@ logs/server.log
 
 # Runtime state files
 logs/.last_archive_run
+
+# NEVER commit — contains passwords / secrets
+EMERGENCY.md
+*CHEATSHEET*
+*PASSWORD*
+*SECRET*
+*.secrets
