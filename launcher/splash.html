@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safari POS Pro - Loading...</title>
+    <link rel="stylesheet" href="splash.css">
+</head>
+<body>
+    <div class="splash-container">
+        <div class="logo-area">
+            <img src="assets/logo.png" alt="Safari POS Pro" class="logo">
+            <h1>SAFARI POS PRO</h1>
+            <p class="slogan">From Vision to Version</p>
+        </div>
+
+        <div class="loader">
+            <div class="spinner"></div>
+        </div>
+
+        <div class="status" id="statusText">Starting server...</div>
+        <div class="substatus" id="subStatus"></div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="error-box" id="errorBox" style="display:none">
+            <div class="error-icon">⚠</div>
+            <div class="error-title">Startup Failed</div>
+            <div class="error-msg" id="errorMsg">The server did not respond in time.</div>
+            <div class="error-actions">
+                <button onclick="location.reload()" class="btn-retry">Retry</button>
+                <button onclick="window.close()" class="btn-close">Close</button>
+            </div>
+            <div class="error-help">Check logs at: safari-pos-pro\logs\startup.log</div>
+        </div>
+    </div>
+
+    <script src="splash.js"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #6b3410 0%, #8b4513 50%, #d2691e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    overflow: hidden;
+    user-select: none;
+}
+
+.splash-container {
+    text-align: center;
+    padding: 40px;
+    max-width: 500px;
+    width: 100%;
+}
+
+.logo-area {
+    margin-bottom: 40px;
+    animation: fadeInDown 0.6s ease-out;
+}
+
+.logo {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 20px;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+    animation: pulse 2s ease-in-out infinite;
+}
+
+h1 {
+    font-size: 34px;
+    letter-spacing: 3px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+.slogan {
+    font-size: 14px;
+    font-style: italic;
+    opacity: 0.85;
+    letter-spacing: 1px;
+}
+
+.loader {
+    margin: 30px 0;
+    display: flex;
+    justify-content: center;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 5px solid rgba(255,255,255,0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.status {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+
+.substatus {
+    font-size: 12px;
+    opacity: 0.75;
+    margin-bottom: 30px;
+    min-height: 18px;
+}
+
+.progress-bar {
+    width: 100%;
+    max-width: 320px;
+    height: 6px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffd700, #ffed4e);
+    border-radius: 3px;
+    transition: width 0.3s ease-out;
+    box-shadow: 0 0 12px rgba(255,215,0,0.6);
+}
+
+/* Error state */
+.error-box {
+    background: rgba(211, 47, 47, 0.95);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 30px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.error-icon {
+    font-size: 42px;
+    margin-bottom: 10px;
+}
+
+.error-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.error-msg {
+    font-size: 13px;
+    opacity: 0.95;
+    margin-bottom: 20px;
+    line-height: 1.4;
+}
+
+.error-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.btn-retry,
+.btn-close {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.2s;
+    font-family: inherit;
+}
+
+.btn-retry {
+    background: #fff;
+    color: #d32f2f;
+}
+
+.btn-close {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.4);
+}
+
+.btn-retry:hover,
+.btn-close:hover {
+    transform: translateY(-2px);
+}
+
+.error-help {
+    font-size: 11px;
+    opacity: 0.7;
+    font-family: 'Consolas', monospace;
+}
+
+/* Animations */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

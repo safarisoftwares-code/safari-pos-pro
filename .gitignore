@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.sqlite3
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Backups
+backups/*.db
+backups/*.zip
+
+# Logs
+logs/*.log
+logs/archive/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.spec.bak
+SafariPOSPro.exe
+
+# Local test files
+test_*.py
+test_*.db
+
+# Allow .gitkeep placeholders in empty dirs
+!dist/.gitkeep
+!build/.gitkeep
+!backups/.gitkeep
+!database/.gitkeep
+!logs/.gitkeep
