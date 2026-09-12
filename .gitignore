@@ -85,3 +85,7 @@ EMERGENCY.md
 *PASSWORD*
 *SECRET*
 *.secrets
+
+# Runtime logs
+logs/crash.txt
+logs/*.txt
