@@ -320,6 +320,7 @@ async function loadProducts() {
                 "</td><td>KSh " + p.price + "</td>" +
                 "<td style=\"text-align:center;font-weight:bold\">" + taxLabel + "</td>" +
                 "<td>" + p.stock + "</td>" +
+                "<td style=\"text-align:center;color:#666;font-size:11px\">" + (p.low_stock_alert || 5) + "</td>" +
                 "<td>" +
                 "<button onclick=\"openEditProductModal(" + p.id + ")\" style=\"padding:5px 10px;font-size:10px;margin-right:3px;background:#2e7d32;color:white;border:none;border-radius:3px;cursor:pointer\">Edit</button>" +
                 "<button onclick=\"openStockModal(" + p.id + ")\" style=\"padding:5px 10px;font-size:10px;margin-right:3px;cursor:pointer\">Stock</button>" +
@@ -390,6 +391,7 @@ async function saveProduct() {
         cost: costVal ? parseFloat(costVal) : null,
         tax_rate: parseFloat(document.getElementById("productTaxRate").value) || 0,
         stock: parseInt(stockRaw),
+        low_stock_alert: parseInt(document.getElementById("productLowStockAlert").value) || 5,
         expiry_date: document.getElementById("productExpiry").value || null,
     };
 
@@ -417,6 +419,7 @@ async function openEditProductModal(productId) {
     document.getElementById("editProductCost").value = product.cost || "";
     document.getElementById("editProductTaxRate").value = product.tax_rate || 0;
     document.getElementById("editProductStock").value = product.stock;
+    document.getElementById("editProductLowStockAlert").value = product.low_stock_alert || 5;
     document.getElementById("editProductExpiry").value = product.expiry_date || "";
 
     openModal("editProductModal");
@@ -443,6 +446,7 @@ async function saveEditedProduct() {
         cost: costVal ? parseFloat(costVal) : null,
         tax_rate: parseFloat(document.getElementById("editProductTaxRate").value) || 0,
         stock: parseInt(stockRaw),
+        low_stock_alert: parseInt(document.getElementById("editProductLowStockAlert").value) || 5,
         expiry_date: document.getElementById("editProductExpiry").value || null,
     };
 
@@ -871,6 +875,14 @@ async function loadDashboard() {
     } catch (err) {
         console.error("[loadDashboard]", err);
     }
+    // Also refresh low-stock alerts so the dashboard shows them on load
+    try {
+        if (typeof loadLowStock === "function") {
+            await loadLowStock();
+        }
+    } catch (err) {
+        console.error("[loadDashboard->loadLowStock]", err);
+    }
 }
 
 
@@ -1241,12 +1253,16 @@ async function loadLowStock() {
         const items = await apiCall("/reports/low-stock");
         const html = (items && items.length > 0)
             ? items.map(p =>
-                "<div style='padding:10px;background:#fff3cd;margin-bottom:5px;border-radius:5px'><strong>" +
-                p.name + "</strong> - Stock: " + p.stock + "</div>"
+                "<div style='padding:10px;background:#fff3cd;margin-bottom:5px;border-radius:5px;border-left:4px solid #ffc107'>" +
+                "<strong>" + p.name + "</strong> — Stock: <strong style='color:#d32f2f'>" +
+                p.stock + "</strong> <small style='color:#666'>(alert threshold: ≤ " +
+                (p.low_stock_alert || 5) + ")</small></div>"
             ).join("")
-            : "<p>No low stock items</p>";
+            : "<p style='color:#2e7d32'>No low stock items (all products have stock above their threshold)</p>";
         const l1 = document.getElementById("lowStockList");
         if (l1) l1.innerHTML = html;
+        const l2 = document.getElementById("lowStockListReports");
+        if (l2) l2.innerHTML = html;
     } catch (err) {
         console.error("[loadLowStock]", err);
     }

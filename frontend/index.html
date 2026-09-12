@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.5">
 </head>
 <body>
     <div class="dashboard-container">
@@ -82,7 +82,7 @@
             <!-- ============================== PRODUCTS ============================== -->
             <div id="products" class="view" style="display:none;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:20px"><h2>Products</h2><button class="btn btn-primary" onclick="openProductModal()" style="width:auto;padding:10px 20px">Add Product</button></div>
-                <div class="data-table"><table style="width:100%"><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Category</th><th>Price</th><th>Tax</th><th>Stock</th><th>Actions</th></tr></thead><tbody id="productsTableBody"></tbody></table></div>
+                <div class="data-table"><table style="width:100%"><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Category</th><th>Price</th><th>Tax</th><th>Stock</th><th>Alert ≤</th><th>Actions</th></tr></thead><tbody id="productsTableBody"></tbody></table></div>
             </div>
 
             <!-- ============================== CATEGORIES ============================== -->
@@ -103,7 +103,7 @@
                 <div class="card"><h3 class="card-title">Daily Close</h3><p>Date: <span id="dailyCloseDate"></span> | Transactions: <span id="dailyCloseTransactions">0</span></p><table style="width:100%"><tbody id="dailyCloseTableBody"></tbody></table></div>
                 <div class="card"><h3 class="card-title">Profit Report</h3><div class="data-table"><table style="width:100%"><thead><tr><th>Product</th><th>Selling</th><th>Tax</th><th>Net</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead><tbody id="profitTableBody"></tbody></table></div></div>
                 <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 class="card-title" style="margin:0">All Sales</h3><button onclick="deleteSalesBefore()" style="background:#d32f2f;color:white;padding:5px 10px;border:none;border-radius:5px;cursor:pointer;font-size:11px">Delete Before Date</button></div><div class="data-table"><table style="width:100%"><thead><tr><th>Receipt</th><th>Date</th><th>Cashier</th><th>Total</th><th>Actions</th></tr></thead><tbody id="allSalesTableBody"></tbody></table></div></div>
-                <div class="card"><h3 class="card-title">Low Stock</h3><div id="lowStockList"></div></div>
+                <div class="card"><h3 class="card-title">Low Stock</h3><div id="lowStockListReports"></div></div>
             </div>
 
             <!-- ============================== ANALYTICS ============================== -->
@@ -183,11 +183,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=1.0"></script>
-    <script src="/static/js/app.js?v=1.0"></script>
-    <script src="/static/js/main.js?v=1.0"></script>
-    <script src="/static/js/analytics.js?v=1.0"></script>
-    <script src="/static/js/tax.js?v=1.0"></script>
+    <script src="/static/js/auth.js?v=1.5"></script>
+    <script src="/static/js/app.js?v=1.5"></script>
+    <script src="/static/js/main.js?v=1.5"></script>
+    <script src="/static/js/analytics.js?v=1.5"></script>
+    <script src="/static/js/tax.js?v=1.5"></script>
 
     <!-- ============================== MODALS ============================== -->
 
@@ -230,6 +230,7 @@
         <div class="form-group"><label>Cost (KSh)</label><input type="number" id="productCost" step="0.01"></div>
         <div class="form-group"><label>Tax Status</label><select id="productTaxRate"><option value="16">A - Taxable</option><option value="0">B - Non-Taxable</option></select></div>
         <div class="form-group"><label>Stock</label><input type="number" id="productStock" value="0" required></div>
+        <div class="form-group"><label>Low Stock Alert (warn when stock ≤ this)</label><input type="number" id="productLowStockAlert" value="5" min="0"></div>
         <div class="form-group"><label>Expiry Date</label><input type="date" id="productExpiry"></div>
         <div style="display:flex;gap:10px"><button type="submit" class="btn btn-primary" style="flex:1">Add</button><button type="button" class="btn btn-danger" onclick="closeModal(&#39;productModal&#39;)" style="flex:1">Cancel</button></div>
     </form></div></div>
@@ -244,6 +245,7 @@
         <div class="form-group"><label>Cost (KSh)</label><input type="number" id="editProductCost" step="0.01"></div>
         <div class="form-group"><label>Tax Status</label><select id="editProductTaxRate"><option value="16">A - Taxable</option><option value="0">B - Non-Taxable</option></select></div>
         <div class="form-group"><label>Stock</label><input type="number" id="editProductStock" required></div>
+        <div class="form-group"><label>Low Stock Alert (warn when stock ≤ this)</label><input type="number" id="editProductLowStockAlert" value="5" min="0"></div>
         <div class="form-group"><label>Expiry Date</label><input type="date" id="editProductExpiry"></div>
         <div style="display:flex;gap:10px"><button type="submit" class="btn btn-primary" style="flex:1">Save</button><button type="button" class="btn btn-danger" onclick="closeModal(&#39;editProductModal&#39;)" style="flex:1">Cancel</button></div>
     </form></div></div>

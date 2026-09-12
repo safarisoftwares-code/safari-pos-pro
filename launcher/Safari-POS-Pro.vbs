@@ -54,7 +54,7 @@ If edgePath = "" Then
 End If
 
 ' ---------- Step 3: Launch Edge with dedicated profile ----------
-edgeCmd = """" & edgePath & """ --app=""file:///" & Replace(splashPath, "\", "/") & """ " & _
+edgeCmd = """" & edgePath & """ --app=""file:///" & Replace(splashPath, "\", "/") & """ --disable-http-cache " & _
           "--user-data-dir=""" & edgeProfile & """ " & _
           "--start-maximized " & _
           "--no-first-run --no-default-browser-check"
