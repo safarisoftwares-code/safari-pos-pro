@@ -352,16 +352,29 @@ function renderPOSProducts(list) {
     }
 
     const display = list.slice(0, 60);
-    grid.innerHTML = display.map(p =>
-        "<div class=\"product-card\" onclick=\"addToCart(" + p.id + ")\">" +
-        "<div class=\"product-name\">" + p.name + "</div>" +
-        (p.unit ? "<div style=\"font-size:10px;color:#666\">" + p.unit + "</div>" : "") +
-        "<div class=\"product-price\">KSh " + p.price + "</div>" +
-        (p.stock <= 0
-            ? "<div style=\"background:#d32f2f;color:white;padding:2px 5px;border-radius:3px;font-size:9px\">OUT OF STOCK</div>"
-            : "<div class=\"product-stock\">Stock: " + p.stock + "</div>") +
-        "</div>"
-    ).join("");
+    grid.innerHTML = display.map(p => {
+        // Expiry warning bar (matches v3.0 Standard)
+        let expiryBar = "";
+        if (p.expiry_date) {
+            const today = new Date();
+            const expiry = new Date(p.expiry_date);
+            const daysLeft = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
+            if (daysLeft < 0) {
+                expiryBar = "<div style=\"background:#ffe5e5;color:#b71c1c;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRED</div>";
+            } else if (daysLeft <= 7) {
+                expiryBar = "<div style=\"background:#fff8e1;color:#e65100;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRES IN " + daysLeft + " DAYS</div>";
+            }
+        }
+        return "<div class=\"product-card\" onclick=\"addToCart(" + p.id + ")\">" +
+            "<div class=\"product-name\">" + p.name + "</div>" +
+            (p.unit ? "<div style=\"font-size:10px;color:#666\">" + p.unit + "</div>" : "") +
+            "<div class=\"product-price\">KSh " + p.price + "</div>" +
+            (p.stock <= 0
+                ? "<div style=\"background:#d32f2f;color:white;padding:2px 5px;border-radius:3px;font-size:9px\">OUT OF STOCK</div>"
+                : "<div class=\"product-stock\">Stock: " + p.stock + "</div>") +
+            expiryBar +
+            "</div>";
+    }).join("");
 }
 
 async function openProductModal() {
