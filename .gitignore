@@ -99,3 +99,7 @@ _seed.py
 _fix.py
 _write.py
 _check.py
+
+# Debug payloads
+_profit_payload.html
+*_payload.html
