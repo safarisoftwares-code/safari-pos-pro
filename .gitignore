@@ -89,3 +89,6 @@ EMERGENCY.md
 # Runtime logs
 logs/crash.txt
 logs/*.txt
+
+# Legacy wrong-path log folder
+backend/logs/
