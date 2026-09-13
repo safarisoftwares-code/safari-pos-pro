@@ -859,11 +859,13 @@ function buildReceiptHtml(sale, isReprint) {
         "table{width:100%;font-size:10px;border-collapse:collapse}td{padding:3px 0}" +
         ".total-row{font-weight:bold;font-size:11px}" +
         ".footer{text-align:center;margin-top:15px;font-size:9px}</style></head><body>" +
-        "<div class='header'><h2>" + (bs.business_name || "Safari POS") + "</h2>" +
-        (bs.business_po_box ? "<p>" + bs.business_po_box + "</p>" : "") +
-        (bs.business_location ? "<p>" + bs.business_location + "</p>" : "") +
-        (bs.business_tax_pin ? "<p>PIN: " + bs.business_tax_pin + "</p>" : "") +
-        (bs.business_phone ? "<p>Tel: " + bs.business_phone + "</p>" : "") +
+        "<div class='header'>" +
+        "<h2>" + (bs.business_name || "Safari POS") + "</h2>" +
+        "<p>" + [bs.business_po_box, bs.business_location].filter(Boolean).join(", ") + "</p>" +
+        "<table style='width:100%;font-size:10px;margin-top:4px;border-collapse:collapse'><tr>" +
+        "<td style='text-align:left;padding:0'>" + (bs.business_tax_pin ? "PIN: " + bs.business_tax_pin : "") + "</td>" +
+        "<td style='text-align:right;padding:0'>" + (bs.business_phone ? "Tel: " + bs.business_phone : "") + "</td>" +
+        "</tr></table>" +
         "</div><hr>" + banner +
         "<p style='font-size:10px'>Receipt: " + sale.receipt_no + "</p>" +
         "<p style='font-size:10px'>Date: " + new Date(sale.created_at).toLocaleString() + "</p><hr>" +
@@ -1068,9 +1070,11 @@ function _printReceiptObject(receipt, settings, showReprintBanner) {
         ".cb{display:block;margin:20px auto;padding:10px 20px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer}" +
         "@media print{.cb{display:none}}</style></head><body>" +
         "<div class='h'><h2>" + (settings.business_name || "Safari POS") + "</h2>" +
-        (settings.business_po_box ? "<p>" + settings.business_po_box + "</p>" : "") +
-        (settings.business_location ? "<p>" + settings.business_location + "</p>" : "") +
-        (settings.business_phone ? "<p>Tel: " + settings.business_phone + "</p>" : "") +
+        "<p>" + [settings.business_po_box, settings.business_location].filter(Boolean).join(", ") + "</p>" +
+        "<table style='width:100%;font-size:10px;margin-top:4px;border-collapse:collapse'><tr>" +
+        "<td style='text-align:left;padding:0'>" + (settings.business_tax_pin ? "PIN: " + settings.business_tax_pin : "") + "</td>" +
+        "<td style='text-align:right;padding:0'>" + (settings.business_phone ? "Tel: " + settings.business_phone : "") + "</td>" +
+        "</tr></table>" +
         "</div><hr>" + banner + "<hr>" +
         "<p style='font-size:11px'>Receipt: " + receipt.receipt_no + "</p>" +
         "<p style='font-size:11px'>Date: " + receipt.created_at + "</p><hr>" +

@@ -15,6 +15,7 @@ import sqlite3
 import threading
 import time
 import os
+import re
 import json
 from datetime import datetime
 from database import DB_PATH
@@ -23,6 +24,85 @@ from database import DB_PATH
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 PRINT_LOG = os.path.join(LOG_DIR, "print_processor.log")
+
+
+# ============================================================
+#  PDF Archive
+# ============================================================
+
+def _get_pdf_archive_folder():
+    """Get the configured PDF archive folder (from settings table)."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM settings WHERE key = 'pdf_fallback_folder'")
+            row = cur.fetchone()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+
+    # Default: Desktop\Safari-POS-Printed
+    home = os.path.expanduser("~")
+    return os.path.join(home, "Desktop", "Safari-POS-Printed")
+
+
+def _extract_ref_from_html(html_payload):
+    """Try to pull the receipt number (e.g., INV-20260913-0001) from the HTML."""
+    m = re.search(r"(INV-\d{8}-\d{4})", html_payload)
+    if m:
+        return m.group(1)
+    m = re.search(r"Receipt[:\s]+([A-Z0-9\-]+)", html_payload)
+    if m:
+        return m.group(1)
+    return "unknown"
+
+
+def save_pdf_archive(job_type, html_payload, timestamp=None):
+    """
+    Render HTML to PDF and save it under:
+      <archive_folder>\YYYYMMDD\HH-MM-SS_<job_type>_<ref>.pdf
+
+    Returns (success, path_or_error).
+    """
+    if timestamp is None:
+        now = datetime.now()
+    else:
+        now = timestamp
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:
+        return False, f"playwright not installed: {e}"
+
+    try:
+        base = _get_pdf_archive_folder()
+        date_folder = now.strftime("%Y%m%d")
+        target_dir = os.path.join(base, date_folder)
+        os.makedirs(target_dir, exist_ok=True)
+
+        ref = _extract_ref_from_html(html_payload)
+        filename = f"{now.strftime('%H-%M-%S')}_{job_type}_{ref}.pdf"
+        target_path = os.path.join(target_dir, filename)
+
+        # Render via headless Chromium
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                page = browser.new_page()
+                page.set_content(html_payload, wait_until="load")
+                page.pdf(
+                    path=target_path,
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
+                )
+            finally:
+                browser.close()
+
+        return True, target_path
+    except Exception as e:
+        return False, f"PDF render failed: {e}"
 
 # Config
 POLL_INTERVAL_SECONDS = 3
@@ -280,7 +360,14 @@ def _process_one() -> bool:
 
     log_event(f"PROCESSING job #{job_id} type={job_type} printer={printer_name}")
 
-    # Send
+    # STEP 1: Save PDF archive (always — even if printer fails)
+    pdf_ok, pdf_path_or_err = save_pdf_archive(job_type, payload)
+    if pdf_ok:
+        log_event(f"PDF SAVED job #{job_id}: {pdf_path_or_err}")
+    else:
+        log_event(f"PDF FAIL job #{job_id}: {pdf_path_or_err}")
+
+    # STEP 2: Send to printer
     success, error = _send_to_printer(printer_name, payload)
 
     # Update
