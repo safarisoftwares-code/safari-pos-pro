@@ -128,6 +128,10 @@ function showView(viewName) {
             typeof loadAnalytics === "function" && loadAnalytics();
             typeof loadExpiryReport === "function" && loadExpiryReport();
         },
+        printQueue: () => {
+            typeof loadPrintQueue === "function" && loadPrintQueue();
+            typeof startPrintQueueAutoRefresh === "function" && startPrintQueueAutoRefresh();
+        },
         tax: () => {
               typeof loadTaxReport === "function" && loadTaxReport();
               typeof loadTaxArchive === "function" && loadTaxArchive();
@@ -816,7 +820,83 @@ async function confirmMpesa() {
 //  Receipt printing
 // ============================================================
 
+async function queueReceiptPrint(sale) {
+    // Build HTML payload for the receipt (same content as printReceipt but as string)
+    const html = buildReceiptHtml(sale, false);
+    try {
+        const result = await apiCall("/print-queue/enqueue", "POST", {
+            job_type: "receipt",
+            printer_name: "",  // use configured printer
+            payload: html,
+        });
+        console.log("[auto-print] Queued job #" + result.job_id + " for printer: " + result.printer_name);
+        return true;
+    } catch (e) {
+        console.warn("[auto-print] Failed to queue:", e.message);
+        return false;
+    }
+}
+
+function buildReceiptHtml(sale, isReprint) {
+    let itemsHtml = "";
+    sale.items.forEach(item => {
+        const taxLabel = (item.tax_rate || 0) > 0 ? "A" : "B";
+        itemsHtml += "<tr><td>" + item.name + (item.unit ? " (" + item.unit + ")" : "") + "</td>" +
+            "<td style='text-align:center'>" + item.quantity + "</td>" +
+            "<td style='text-align:center;font-weight:bold'>" + taxLabel + "</td>" +
+            "<td style='text-align:right'>" + item.total_price.toFixed(2) + "</td></tr>";
+    });
+
+    const bs = businessSettings || {};
+    const banner = isReprint
+        ? "<div style='text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:8px;margin:10px 0'><strong style='color:#d32f2f;font-size:13px'>*** REPRINTED COPY ***</strong></div>"
+        : "";
+
+    return "<!DOCTYPE html><html><head><title>Receipt</title><style>" +
+        "body{font-family:'Courier New',monospace;padding:20px;max-width:300px;margin:auto}" +
+        ".header{text-align:center;margin-bottom:15px}.header h2{margin:0;font-size:18px}.header p{margin:2px 0;font-size:10px}" +
+        "hr{border:none;border-top:1px dashed #000;margin:10px 0}" +
+        "table{width:100%;font-size:10px;border-collapse:collapse}td{padding:3px 0}" +
+        ".total-row{font-weight:bold;font-size:11px}" +
+        ".footer{text-align:center;margin-top:15px;font-size:9px}</style></head><body>" +
+        "<div class='header'><h2>" + (bs.business_name || "Safari POS") + "</h2>" +
+        (bs.business_po_box ? "<p>" + bs.business_po_box + "</p>" : "") +
+        (bs.business_location ? "<p>" + bs.business_location + "</p>" : "") +
+        (bs.business_tax_pin ? "<p>PIN: " + bs.business_tax_pin + "</p>" : "") +
+        (bs.business_phone ? "<p>Tel: " + bs.business_phone + "</p>" : "") +
+        "</div><hr>" + banner +
+        "<p style='font-size:10px'>Receipt: " + sale.receipt_no + "</p>" +
+        "<p style='font-size:10px'>Date: " + new Date(sale.created_at).toLocaleString() + "</p><hr>" +
+        "<table><thead><tr><th>Item</th><th style='text-align:center'>Qty</th><th style='text-align:center'>Tax</th><th style='text-align:right'>Amount</th></tr></thead><tbody>" +
+        itemsHtml + "</tbody></table><hr>" +
+        "<table>" +
+        "<tr><td>Subtotal:</td><td style='text-align:right'>" + sale.subtotal.toFixed(2) + "</td></tr>" +
+        "<tr><td>Tax (incl.):</td><td style='text-align:right'>" + sale.tax_amount.toFixed(2) + "</td></tr>" +
+        "<tr class='total-row'><td>TOTAL:</td><td style='text-align:right'>KSh " + sale.total_amount.toFixed(2) + "</td></tr>" +
+        "</table><hr>" +
+        "<p style='font-size:10px'>Payment: " + sale.payment_method.toUpperCase() + "</p>" +
+        "<p style='font-size:10px'>Served by: " + (authManager.getUser() ? authManager.getUser().name : "N/A") + "</p>" +
+        "<div class='footer'><p>" + (bs.receipt_footer || "") + "</p><hr><p style='font-size:9px'>A = Taxable | B = Non-Taxable</p></div>" +
+        "</body></html>";
+}
+
 function printReceipt(sale) {
+    // If auto-print is on, queue silently instead of browser popup
+    if (businessSettings && businessSettings.auto_print_receipt !== "false") {
+        queueReceiptPrint(sale).then(queued => {
+            if (queued) {
+                console.log("[auto-print] Receipt queued for printing");
+            } else {
+                // Fall back to browser print if queue failed
+                _browserPrintReceipt(sale);
+            }
+        });
+        return;
+    }
+    _browserPrintReceipt(sale);
+}
+
+function _browserPrintReceipt(sale) {
     let itemsHtml = "";
     sale.items.forEach(item => {
         const taxLabel = (item.tax_rate || 0) > 0 ? "A" : "B";
@@ -1855,4 +1935,102 @@ async function savePrinterSettings() {
         }
         showError(e);
     }
+}
+
+
+
+// ============================================================
+//  Print Queue UI
+// ============================================================
+
+let pqAutoRefresh = null;
+
+async function loadPrintQueue() {
+    try {
+        const data = await apiCall("/print-queue/summary");
+
+        const counts = data.counts || {};
+        document.getElementById("pqPending").textContent = counts.pending || 0;
+        document.getElementById("pqPrinting").textContent = counts.printing || 0;
+        document.getElementById("pqPrinted").textContent = counts.printed || 0;
+        document.getElementById("pqFailed").textContent = counts.failed || 0;
+
+        const tbody = document.getElementById("pqTableBody");
+        const recent = data.recent || [];
+
+        if (recent.length === 0) {
+            tbody.innerHTML = "<tr><td colspan=\"7\" style=\"color:#2e7d32\">No print jobs yet</td></tr>";
+        } else {
+            tbody.innerHTML = recent.map(j => {
+                const statusColors = {
+                    "pending":  "#ffc107",
+                    "printing": "#0088cc",
+                    "printed":  "#2e7d32",
+                    "failed":   "#d32f2f"
+                };
+                const color = statusColors[j.status] || "#666";
+
+                let actionCell = "";
+                if (j.status === "failed") {
+                    actionCell = "<button onclick=\"retryPrintJob(" + j.id + ")\" style=\"padding:3px 10px;font-size:11px;background:#2e7d32;color:white;border:none;border-radius:3px;cursor:pointer;margin-right:5px\">Retry</button>" +
+                                 "<span style=\"color:#d32f2f;font-size:11px\">" + (j.error_message || "").substring(0, 60) + "</span>";
+                } else {
+                    actionCell = "-";
+                }
+
+                return "<tr><td>" + j.id + "</td><td>" + j.job_type + "</td>" +
+                    "<td style=\"color:" + color + ";font-weight:bold\">" + j.status.toUpperCase() + "</td>" +
+                    "<td>" + j.printer_name + "</td>" +
+                    "<td>" + j.created_at + "</td>" +
+                    "<td>" + (j.printed_at || "-") + "</td>" +
+                    "<td>" + actionCell + "</td></tr>";
+            }).join("");
+        }
+
+        const ts = new Date().toLocaleTimeString();
+        document.getElementById("pqLastUpdated").textContent = "Last updated: " + ts;
+    } catch (e) {
+        console.error("[loadPrintQueue]", e);
+    }
+}
+
+async function sendTestPrint() {
+    try {
+        const result = await apiCall("/print-queue/test", "POST", {});
+        showSuccess("Test job queued as #" + result.job_id + " -> " + result.printer_name);
+        setTimeout(loadPrintQueue, 2000);
+    } catch (e) {
+        showError(e);
+    }
+}
+
+async function clearPrintedJobs() {
+    if (!confirm("Remove all printed jobs from the queue?")) return;
+    try {
+        const result = await apiCall("/print-queue/clear-printed", "POST");
+        showSuccess("Removed " + result.removed + " job(s)");
+        loadPrintQueue();
+    } catch (e) {
+        showError(e);
+    }
+}
+
+async function retryPrintJob(jobId) {
+    try {
+        await apiCall("/print-queue/retry/" + jobId, "POST");
+        showSuccess("Job #" + jobId + " re-queued");
+        setTimeout(loadPrintQueue, 2000);
+    } catch (e) {
+        showError(e);
+    }
+}
+
+function startPrintQueueAutoRefresh() {
+    if (pqAutoRefresh) clearInterval(pqAutoRefresh);
+    pqAutoRefresh = setInterval(() => {
+        const view = document.getElementById("printQueue");
+        if (view && view.style.display !== "none") {
+            loadPrintQueue();
+        }
+    }, 5000);
 }

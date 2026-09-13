@@ -1,0 +1,8 @@
+[2026-09-13 02:43:34] === Print processor started ===
+[2026-09-13 02:43:50] ENQUEUED job #1 type=test printer=Microsoft Print to PDF
+[2026-09-13 02:43:52] PROCESSING job #1 type=test printer=Microsoft Print to PDF
+[2026-09-13 02:43:52] FAILED job #1: win32print / Pillow not installed: No module named 'PIL'
+[2026-09-13 02:46:04] === Print processor started ===
+[2026-09-13 02:46:18] ENQUEUED job #2 type=test printer=Microsoft Print to PDF
+[2026-09-13 02:46:19] PROCESSING job #2 type=test printer=Microsoft Print to PDF
+[2026-09-13 02:46:19] PRINTED job #2

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.2">
 </head>
 <body>
     <div class="dashboard-container">
@@ -22,6 +22,7 @@
                 <li><a onclick="showView(&#39;reports&#39;)">Reports</a></li>
                 <li><a onclick="showView(&#39;analytics&#39;)">Analytics</a></li>
                 <li><a onclick="showView(&#39;tax&#39;)">Tax</a></li>
+                <li><a onclick="showView(&#39;printQueue&#39;)">Print Queue</a></li>
                 <li><a onclick="showView(&#39;receipts&#39;)">Receipts</a></li>
                 <li><a onclick="showView(&#39;purchaseOrders&#39;)">Purchase Orders</a></li>
                 <li><a onclick="showView(&#39;backup&#39;)">Backup</a></li>
@@ -161,6 +162,36 @@
                 </div>
             </div>
 
+            <!-- ============================== PRINT QUEUE ============================== -->
+            <div id="printQueue" class="view" style="display:none;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+                    <h2>Print Queue</h2>
+                    <div style="display:flex;gap:10px">
+                        <button onclick="loadPrintQueue()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#0088cc;color:white;border:none;border-radius:5px;cursor:pointer">Refresh</button>
+                        <button onclick="sendTestPrint()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#2e7d32;color:white;border:none;border-radius:5px;cursor:pointer">Test Print</button>
+                        <button onclick="clearPrintedJobs()" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer">Clear Printed</button>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px">
+                    <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Pending</h3><p style="font-size:24px;font-weight:bold;color:#ffc107" id="pqPending">0</p></div>
+                    <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Printing</h3><p style="font-size:24px;font-weight:bold;color:#0088cc" id="pqPrinting">0</p></div>
+                    <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Printed</h3><p style="font-size:24px;font-weight:bold;color:#2e7d32" id="pqPrinted">0</p></div>
+                    <div class="card" style="margin:0"><h3 style="font-size:11px;color:#666">Failed</h3><p style="font-size:24px;font-weight:bold;color:#d32f2f" id="pqFailed">0</p></div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">Recent Jobs</h3>
+                    <p style="font-size:12px;color:#666;margin-bottom:10px" id="pqLastUpdated"></p>
+                    <div class="data-table">
+                        <table style="width:100%">
+                            <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Printer</th><th>Created</th><th>Printed</th><th>Error / Action</th></tr></thead>
+                            <tbody id="pqTableBody"><tr><td colspan="7">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- ============================== RECEIPTS ============================== -->
             <div id="receipts" class="view" style="display:none;">
                 <h2 style="margin-bottom:20px">Receipt History</h2>
@@ -250,11 +281,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=2.0"></script>
-    <script src="/static/js/app.js?v=2.0"></script>
-    <script src="/static/js/main.js?v=2.0"></script>
-    <script src="/static/js/analytics.js?v=2.0"></script>
-    <script src="/static/js/tax.js?v=2.0"></script>
+    <script src="/static/js/auth.js?v=2.2"></script>
+    <script src="/static/js/app.js?v=2.2"></script>
+    <script src="/static/js/main.js?v=2.2"></script>
+    <script src="/static/js/analytics.js?v=2.2"></script>
+    <script src="/static/js/tax.js?v=2.2"></script>
 
     <!-- ============================== MODALS ============================== -->
 

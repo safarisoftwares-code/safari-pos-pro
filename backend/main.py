@@ -8,8 +8,9 @@ from auth import hash_password
 from routers import (
     auth, products, sales, customers, reports, users,
     backup, settings, purchase_orders, analytics, mpesa, tax, printers,
+    print_queue,
 )
-from services import tax_archiver
+from services import tax_archiver, print_processor
 import os
 import sys
 from datetime import datetime
@@ -60,6 +61,7 @@ app.include_router(analytics.router,       prefix="/api/v1/analytics",        ta
 app.include_router(mpesa.router,           prefix="/api/v1/mpesa",            tags=["mpesa"])
 app.include_router(tax.router,             prefix="/api/v1/tax",              tags=["tax"])
 app.include_router(printers.router,        prefix="/api/v1/printers",         tags=["printers"])
+app.include_router(print_queue.router,     prefix="/api/v1/print-queue",      tags=["print-queue"])
 
 # ------------------------------------------------------------
 #  Frontend paths (with PyInstaller EXE support)
@@ -108,6 +110,16 @@ async def health_check():
 # ------------------------------------------------------------
 #  Startup: create tables + ensure admin exists
 # ------------------------------------------------------------
+@app.on_event("shutdown")
+async def shutdown_event():
+    try:
+        from services import print_processor
+        print_processor.stop_worker()
+        print("[print-queue] Background worker signalled to stop")
+    except Exception as e:
+        print(f"[print-queue] Shutdown warning: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     Base.metadata.create_all(bind=engine)
@@ -157,7 +169,7 @@ async def startup_event():
     # ------------------------------------------------------------------
     try:
         import time
-        from services import tax_archiver
+        from services import tax_archiver, print_processor
 
         last_run_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -202,6 +214,16 @@ async def startup_event():
                 )
     except Exception as e:
         print(f"[tax-archive] WARNING: {e}")
+
+    # ------------------------------------------------------------------
+    #  Phase 4: Start print queue background worker
+    # ------------------------------------------------------------------
+    try:
+        from services import print_processor
+        print_processor.start_worker()
+        print("[print-queue] Background worker started")
+    except Exception as e:
+        print(f"[print-queue] WARNING: Failed to start worker: {e}")
 
     # Ensure admin exists
     db = SessionLocal()
