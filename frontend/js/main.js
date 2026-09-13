@@ -2038,3 +2038,142 @@ function startPrintQueueAutoRefresh() {
         }
     }, 5000);
 }
+
+
+
+// ============================================================
+//  Report Push-to-Print
+// ============================================================
+
+function _reportHtmlHeader(title) {
+    const bs = businessSettings || {};
+    return "<div style='text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:15px'>" +
+        "<h1 style='margin:0;font-size:20px'>" + (bs.business_name || "Safari POS Pro") + "</h1>" +
+        "<p style='margin:4px 0;font-size:11px'>" +
+        [(bs.business_po_box || ""), (bs.business_location || "")].filter(Boolean).join(", ") +
+        "</p>" +
+        "<p style='margin:4px 0;font-size:11px'>" +
+        (bs.business_phone ? "Tel: " + bs.business_phone : "") +
+        (bs.business_tax_pin ? " | PIN: " + bs.business_tax_pin : "") +
+        "</p>" +
+        "<h2 style='margin:10px 0 0 0;font-size:16px;text-transform:uppercase'>" + title + "</h2>" +
+        "<p style='margin:4px 0;font-size:11px'>Generated: " +
+        new Date().toLocaleString() + "</p>" +
+        "</div>";
+}
+
+function _reportHtmlFooter() {
+    const user = authManager.getUser();
+    return "<div style='margin-top:20px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;text-align:center'>" +
+        "Printed by: " + (user ? user.name : "N/A") + " | Safari POS Pro v4.0 | From Vision to Version" +
+        "</div>";
+}
+
+function _wrapReport(title, bodyHtml) {
+    return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" + title + "</title>" +
+        "<style>" +
+        "body{font-family:Arial,sans-serif;padding:20px;color:#222}" +
+        "table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px;table-layout:fixed}td,th{word-wrap:break-word;overflow-wrap:break-word}" +
+        "th,td{border:1px solid #999;padding:6px;text-align:left}" +
+        "th{background:#8b4513;color:white}" +
+        "tr:nth-child(even){background:#f9f9f9}" +
+        ".total-row{font-weight:bold;background:#f5e6d3}" +
+        "</style></head><body>" +
+        _reportHtmlHeader(title) +
+        bodyHtml +
+        _reportHtmlFooter() +
+        "</body></html>";
+}
+
+async function printReport(reportType) {
+    try {
+        let payload = "";
+        let title = "";
+
+        if (reportType === "daily-close") {
+            const data = await apiCall("/sales/daily-close");
+            title = "Daily Close Report";
+            payload = _wrapReport(title,
+                "<p><strong>Date:</strong> " + data.date + "</p>" +
+                "<table><tr><th>Payment Method</th><th>Total</th></tr>" +
+                "<tr><td>Cash</td><td>KSh " + data.cash_total.toFixed(2) + "</td></tr>" +
+                "<tr><td>M-Pesa</td><td>KSh " + data.mpesa_total.toFixed(2) + "</td></tr>" +
+                "<tr><td>Card</td><td>KSh " + data.card_total.toFixed(2) + "</td></tr>" +
+                "<tr class='total-row'><td>GRAND TOTAL</td><td>KSh " + data.grand_total.toFixed(2) + "</td></tr>" +
+                "</table>" +
+                "<p style='margin-top:15px'><strong>Total Transactions:</strong> " + data.total_transactions + "</p>"
+            );
+        } else if (reportType === "profit") {
+            const data = await apiCall("/reports/profit");
+            title = "Profit Report";
+            let rows = "";
+            data.forEach(p => {
+                rows += "<tr><td>" + p.product + "</td><td>KSh " + p.selling_price + "</td>" +
+                    "<td>" + p.tax_rate + "%</td><td>KSh " + p.net_selling + "</td>" +
+                    "<td>KSh " + (p.cost || 0) + "</td><td>KSh " + p.gross_profit + "</td>" +
+                    "<td>" + p.profit_margin + "%</td></tr>";
+            });
+            payload = _wrapReport(title,
+                "<table><tr><th>Product</th><th>Selling</th><th>Tax</th><th>Net</th><th>Cost</th><th>Profit</th><th>Margin</th></tr>" +
+                (rows || "<tr><td colspan='7'>No data</td></tr>") + "</table>"
+            );
+        } else if (reportType === "sales") {
+            const data = await apiCall("/sales/all");
+            title = "All Sales Report";
+            let rows = "";
+            let total = 0;
+            data.forEach(s => {
+                total += s.total_amount;
+                rows += "<tr><td>" + s.receipt_no + "</td><td>" + s.created_at + "</td>" +
+                    "<td>" + s.cashier + "</td><td>" + s.payment_method.toUpperCase() + "</td>" +
+                    "<td>KSh " + s.total_amount.toFixed(2) + "</td></tr>";
+            });
+            payload = _wrapReport(title,
+                "<table><tr><th>Receipt</th><th>Date</th><th>Cashier</th><th>Payment</th><th>Total</th></tr>" +
+                (rows || "<tr><td colspan='5'>No sales</td></tr>") +
+                "<tr class='total-row'><td colspan='4'>TOTAL</td><td>KSh " + total.toFixed(2) + "</td></tr>" +
+                "</table>"
+            );
+        } else if (reportType === "analytics") {
+            const data = await apiCall("/analytics/overview");
+            title = "Analytics Overview";
+            let html = "<h3 style='color:#8b4513;font-size:14px;margin-top:20px'>Top Sellers</h3>";
+            html += "<table><tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th></tr>";
+            (data.top_sellers || []).forEach((t, i) => {
+                html += "<tr><td>" + (i+1) + "</td><td>" + t.name + "</td><td>" + t.qty + "</td><td>KSh " + t.revenue.toFixed(2) + "</td></tr>";
+            });
+            html += "</table>";
+            html += "<h3 style='color:#8b4513;font-size:14px;margin-top:20px'>Profit Champions</h3>";
+            html += "<table><tr><th>#</th><th>Product</th><th>Profit</th><th>Margin</th></tr>";
+            (data.profit_champions || []).forEach((t, i) => {
+                html += "<tr><td>" + (i+1) + "</td><td>" + t.name + "</td><td>KSh " + t.profit.toFixed(2) + "</td><td>" + t.margin + "%</td></tr>";
+            });
+            html += "</table>";
+            payload = _wrapReport(title, html);
+        } else if (reportType === "tax") {
+            const data = await apiCall("/tax/summary");
+            title = "Tax Collection Summary";
+            payload = _wrapReport(title,
+                "<table><tr><th>Period</th><th>Tax Collected</th></tr>" +
+                "<tr><td>Today</td><td>KSh " + data.today_tax.toFixed(2) + "</td></tr>" +
+                "<tr><td>This Month</td><td>KSh " + data.month_tax.toFixed(2) + "</td></tr>" +
+                "<tr><td>This Year</td><td>KSh " + data.year_tax.toFixed(2) + "</td></tr>" +
+                "<tr class='total-row'><td>All Time</td><td>KSh " + data.total_tax.toFixed(2) + "</td></tr>" +
+                "</table>"
+            );
+        } else {
+            alert("Unknown report type: " + reportType);
+            return;
+        }
+
+        const result = await apiCall("/print-queue/enqueue-report", "POST", {
+            report_type: reportType,
+            title: title,
+            payload: payload,
+        });
+
+        showSuccess(title + " queued as job #" + result.job_id + " → " + result.printer_name);
+    } catch (e) {
+        showError(e);
+    }
+}

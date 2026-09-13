@@ -152,3 +152,57 @@ async def test_print(
     )
 
     return {"ok": True, "job_id": job_id, "printer_name": printer_name}
+
+
+
+# ============================================================
+#  Report print endpoint
+# ============================================================
+
+class ReportEnqueueRequest(BaseModel):
+    report_type: str          # 'daily-close' | 'profit' | 'sales' | 'analytics' | 'tax' | 'custom'
+    title: str = ""           # optional override title
+    payload: str              # HTML content
+
+
+@router.post("/enqueue-report")
+async def enqueue_report(
+    req: ReportEnqueueRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Queue a report print job. Uses the configured REPORT printer.
+    Reports are always archived as PDFs by the print processor.
+    """
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only admin or manager can print reports")
+
+    printer_name = _get_setting("report_printer") or ""
+
+    if not printer_name:
+        # Fall back to receipt printer if report printer not set
+        printer_name = _get_setting("receipt_printer") or ""
+
+    if not printer_name:
+        raise HTTPException(
+            status_code=400,
+            detail="No report printer configured. Set one in Settings > Printer Configuration.",
+        )
+
+    if not req.payload.strip():
+        raise HTTPException(status_code=400, detail="Payload is empty")
+
+    job_id = print_processor.enqueue(
+        job_type="report",
+        printer_name=printer_name,
+        payload=req.payload,
+        created_by=current_user.id,
+    )
+
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "printer_name": printer_name,
+        "report_type": req.report_type,
+    }

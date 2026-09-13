@@ -47,14 +47,23 @@ def _get_pdf_archive_folder():
     return os.path.join(home, "Desktop", "Safari-POS-Printed")
 
 
-def _extract_ref_from_html(html_payload):
-    """Try to pull the receipt number (e.g., INV-20260913-0001) from the HTML."""
+def _extract_ref_from_html(html_payload, job_type="unknown"):
+    """Pull a useful ref from the HTML: receipt no for receipts, report name for reports."""
+    # Receipt number
     m = re.search(r"(INV-\d{8}-\d{4})", html_payload)
     if m:
         return m.group(1)
-    m = re.search(r"Receipt[:\s]+([A-Z0-9\-]+)", html_payload)
-    if m:
-        return m.group(1)
+
+    # Report title - look for <h2>...</h2> in the header
+    if job_type == "report":
+        m = re.search(r"<h2[^>]*>([^<]+)</h2>", html_payload)
+        if m:
+            title = m.group(1).strip()
+            safe = re.sub(r"[^A-Za-z0-9 ]+", "", title)
+            safe = safe.strip().replace(" ", "-")
+            if safe:
+                return safe[:40]
+
     return "unknown"
 
 
@@ -81,7 +90,7 @@ def save_pdf_archive(job_type, html_payload, timestamp=None):
         target_dir = os.path.join(base, date_folder)
         os.makedirs(target_dir, exist_ok=True)
 
-        ref = _extract_ref_from_html(html_payload)
+        ref = _extract_ref_from_html(html_payload, job_type)
         filename = f"{now.strftime('%H-%M-%S')}_{job_type}_{ref}.pdf"
         target_path = os.path.join(target_dir, filename)
 
@@ -93,9 +102,13 @@ def save_pdf_archive(job_type, html_payload, timestamp=None):
                 page.set_content(html_payload, wait_until="load")
                 page.pdf(
                     path=target_path,
-                    format="A4",
+                    width="210mm",
+                    height="297mm",
                     print_background=True,
                     margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
+                    prefer_css_page_size=False,
+                    tagged=False,
+                    outline=False,
                 )
             finally:
                 browser.close()

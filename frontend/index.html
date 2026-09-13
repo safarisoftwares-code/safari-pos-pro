@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=2.7">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.1">
 </head>
 <body>
     <div class="dashboard-container">
@@ -101,15 +101,15 @@
             <!-- ============================== REPORTS ============================== -->
             <div id="reports" class="view" style="display:none;">
                 <div style="display:flex;justify-content:space-between"><h2 style="margin-bottom:20px">Reports</h2><button onclick="printSection(&#39;reports&#39;)" style="padding:8px 15px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer">Print</button></div>
-                <div class="card"><h3 class="card-title">Daily Close</h3><p>Date: <span id="dailyCloseDate"></span> | Transactions: <span id="dailyCloseTransactions">0</span></p><table style="width:100%"><tbody id="dailyCloseTableBody"></tbody></table></div>
-                <div class="card"><h3 class="card-title">Profit Report</h3><div class="data-table"><table style="width:100%"><thead><tr><th>Product</th><th>Selling</th><th>Tax</th><th>Net</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead><tbody id="profitTableBody"></tbody></table></div></div>
-                <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 class="card-title" style="margin:0">All Sales</h3><button onclick="deleteSalesBefore()" style="background:#d32f2f;color:white;padding:5px 10px;border:none;border-radius:5px;cursor:pointer;font-size:11px">Delete Before Date</button></div><div class="data-table"><table style="width:100%"><thead><tr><th>Receipt</th><th>Date</th><th>Cashier</th><th>Total</th><th>Actions</th></tr></thead><tbody id="allSalesTableBody"></tbody></table></div></div>
+                <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3 class="card-title" style="margin:0">Daily Close</h3><button onclick="printReport('daily-close')" class="btn btn-secondary" style="width:auto;padding:6px 14px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px">Push to Print</button></div><p>Date: <span id="dailyCloseDate"></span> | Transactions: <span id="dailyCloseTransactions">0</span></p><table style="width:100%"><tbody id="dailyCloseTableBody"></tbody></table></div>
+                <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3 class="card-title" style="margin:0">Profit Report</h3><button onclick="printReport('profit')" class="btn btn-secondary" style="width:auto;padding:6px 14px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px">Push to Print</button></div><div class="data-table"><table style="width:100%"><thead><tr><th>Product</th><th>Selling</th><th>Tax</th><th>Net</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead><tbody id="profitTableBody"></tbody></table></div></div>
+                <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 class="card-title" style="margin:0">All Sales</h3><button onclick="printReport('sales')" class="btn btn-secondary" style="width:auto;padding:6px 14px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;margin-right:8px">Push to Print</button><button onclick="deleteSalesBefore()" style="background:#d32f2f;color:white;padding:5px 10px;border:none;border-radius:5px;cursor:pointer;font-size:11px">Delete Before Date</button></div><div class="data-table"><table style="width:100%"><thead><tr><th>Receipt</th><th>Date</th><th>Cashier</th><th>Total</th><th>Actions</th></tr></thead><tbody id="allSalesTableBody"></tbody></table></div></div>
                 <div class="card"><h3 class="card-title">Low Stock</h3><div id="lowStockListReports"></div></div>
             </div>
 
             <!-- ============================== ANALYTICS ============================== -->
             <div id="analytics" class="view" style="display:none;">
-                <div style="display:flex;justify-content:space-between"><h2 style="margin-bottom:20px">Business Analytics</h2><button onclick="printSection(&#39;analytics&#39;)" style="padding:8px 15px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer">Print</button></div>
+                <div style="display:flex;justify-content:space-between"><h2 style="margin-bottom:20px">Business Analytics</h2><div style="display:flex;gap:8px"><button onclick="printReport('analytics')" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#2e7d32;color:white;border:none;border-radius:5px;cursor:pointer">Push to Print</button><button onclick="printSection(&#39;analytics&#39;)" style="padding:8px 15px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer">Browser Print</button></div></div>
                 <div class="card"><h3 class="card-title">Expiry Tracking</h3><h4 style="color:#d32f2f">Expired</h4><div id="expiredList"></div><h4 style="color:#ffc107;margin-top:10px">Expiring Soon</h4><div id="expiringList"></div></div>
                 <div class="card"><h3 class="card-title">Top Sellers</h3><div class="data-table"><table style="width:100%"><thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead><tbody id="topSellersBody"></tbody></table></div></div>
                 <div class="card"><h3 class="card-title">Worst Sellers</h3><div class="data-table"><table style="width:100%"><thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead><tbody id="worstSellersBody"></tbody></table></div></div>
@@ -120,7 +120,7 @@
 
             <!-- ============================== TAX (single block, no duplicate) ============================== -->
             <div id="tax" class="view" style="display:none;">
-                <h2 style="margin-bottom:20px">Tax Collection Report</h2>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="margin:0">Tax Collection Report</h2><button onclick="printReport('tax')" class="btn btn-secondary" style="width:auto;padding:8px 16px;background:#2e7d32;color:white;border:none;border-radius:5px;cursor:pointer">Push to Print</button></div>
                 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px">
                     <div class="card"><h3 style="font-size:12px;color:#666">Today&#39;s Tax</h3><p style="font-size:22px;font-weight:bold;color:#2e7d32" id="todayTax">KSh 0.00</p></div>
                     <div class="card"><h3 style="font-size:12px;color:#666">This Month</h3><p style="font-size:22px;font-weight:bold;color:#2e7d32" id="monthTax">KSh 0.00</p></div>
@@ -281,11 +281,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=2.7"></script>
-    <script src="/static/js/app.js?v=2.7"></script>
-    <script src="/static/js/main.js?v=2.7"></script>
-    <script src="/static/js/analytics.js?v=2.7"></script>
-    <script src="/static/js/tax.js?v=2.7"></script>
+    <script src="/static/js/auth.js?v=3.1"></script>
+    <script src="/static/js/app.js?v=3.1"></script>
+    <script src="/static/js/main.js?v=3.1"></script>
+    <script src="/static/js/analytics.js?v=3.1"></script>
+    <script src="/static/js/tax.js?v=3.1"></script>
 
     <!-- ============================== MODALS ============================== -->
 
