@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=2.3">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.7">
 </head>
 <body>
     <div class="dashboard-container">
@@ -148,7 +148,7 @@
                     </div>
                     <div id="taxChainResult" style="margin-bottom:15px"></div>
                     <h4 style="color:#8b4513;font-size:13px;margin-bottom:8px">Archived Months</h4>
-                    <div class="data-table"><table style="width:100%"><thead><tr><th>Month</th><th>Rows</th><th>Total Tax</th><th>Archived At</th><th>SHA-256</th></tr></thead><tbody id="taxArchiveTableBody"><tr><td colspan="5">No archived months yet</td></tr></tbody></table></div>
+                    <div class="data-table"><table style="width:100%"><thead><tr><th>Month</th><th>Rows</th><th>Total Tax</th><th>Archived At</th><th>SHA-256</th><th>Actions</th></tr></thead><tbody id="taxArchiveTableBody"><tr><td colspan="5">No archived months yet</td></tr></tbody></table></div>
                 </div>
 
                 <div class="card" id="purgeableCard" style="display:none">
@@ -281,11 +281,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=2.3"></script>
-    <script src="/static/js/app.js?v=2.3"></script>
-    <script src="/static/js/main.js?v=2.3"></script>
-    <script src="/static/js/analytics.js?v=2.3"></script>
-    <script src="/static/js/tax.js?v=2.3"></script>
+    <script src="/static/js/auth.js?v=2.7"></script>
+    <script src="/static/js/app.js?v=2.7"></script>
+    <script src="/static/js/main.js?v=2.7"></script>
+    <script src="/static/js/analytics.js?v=2.7"></script>
+    <script src="/static/js/tax.js?v=2.7"></script>
 
     <!-- ============================== MODALS ============================== -->
 
@@ -419,6 +419,25 @@
 
 
 
+
+
+    <!-- Tax Archive Month Modal -->
+    <div id="taxMonthModal" class="modal">
+        <div class="modal-content" style="max-width:900px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+                <h3 style="color:#8b4513">Archive: <span id="taxMonthTitle"></span></h3>
+                <button onclick="closeModal(&#39;taxMonthModal&#39;)" style="background:#d32f2f;color:white;border:none;padding:6px 14px;border-radius:5px;cursor:pointer">Close</button>
+            </div>
+            <p style="font-size:12px;color:#666;margin-bottom:10px" id="taxMonthInfo"></p>
+            <div class="data-table" style="max-height:400px;overflow-y:auto">
+                <table style="width:100%">
+                    <thead><tr><th>Receipt</th><th>Date</th><th>Product</th><th>Qty</th><th>Unit Price</th><th>Rate</th><th>Tax</th><th>Payment</th><th>Cashier</th></tr></thead>
+                    <tbody id="taxMonthTableBody"><tr><td colspan="9">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <div id="taxMonthExport" style="margin-top:15px"></div>
+        </div>
+    </div>
 
 </body>
 </html>

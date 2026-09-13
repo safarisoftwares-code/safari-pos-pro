@@ -45,7 +45,8 @@ async function loadTaxArchive() {
             tbody.innerHTML = summary.months.map(m =>
                 "<tr><td>" + m.month + "</td><td>" + m.row_count + "</td>" +
                 "<td>KSh " + m.total_tax.toFixed(2) + "</td><td>" + m.archived_at + "</td>" +
-                "<td style=\"font-family:monospace;font-size:11px\">" + m.sha256_short + "</td></tr>"
+                "<td style=\"font-family:monospace;font-size:11px\">" + m.sha256_short + "</td>" +
+                "<td><button onclick=\"viewTaxMonth('" + m.month + "')\" style=\"padding:3px 10px;font-size:11px;background:#0088cc;color:white;border:none;border-radius:3px;cursor:pointer\">View</button></td></tr>"
             ).join("");
         } else {
             tbody.innerHTML = "<tr><td colspan=\"5\" style=\"color:#2e7d32\">No archived months yet (all records are within the last 12 months)</td></tr>";
@@ -128,5 +129,73 @@ async function loadPurgeHistory() {
         ).join("");
     } catch (e) {
         tbody.innerHTML = "<tr><td colspan=\"6\" style=\"color:#d32f2f\">Error: " + e.message + "</td></tr>";
+    }
+}
+
+
+
+// ============================================================
+//  Tax Archive - View & Export a Single Month
+// ============================================================
+
+async function viewTaxMonth(month) {
+    document.getElementById("taxMonthTitle").textContent = month;
+    document.getElementById("taxMonthInfo").textContent = "Loading...";
+    const tbody = document.getElementById("taxMonthTableBody");
+    tbody.innerHTML = "<tr><td colspan=\"9\">Loading...</td></tr>";
+    document.getElementById("taxMonthExport").innerHTML = "";
+    openModal("taxMonthModal");
+
+    try {
+        const data = await apiCall("/tax/archive/month/" + month);
+
+        document.getElementById("taxMonthInfo").textContent =
+            data.total_rows + " row(s) | Total tax: KSh " + data.total_tax.toFixed(2) +
+            " | Archived: " + data.archived_at + " | SHA-256: " + data.sha256_short;
+
+        if (!data.rows || data.rows.length === 0) {
+            tbody.innerHTML = "<tr><td colspan=\"9\" style=\"color:#2e7d32\">No rows in this archive</td></tr>";
+            return;
+        }
+
+        tbody.innerHTML = data.rows.map(r =>
+            "<tr><td>" + r.receipt_no + "</td><td>" + r.created_at + "</td>" +
+            "<td>" + r.product_name + "</td><td>" + r.quantity + "</td>" +
+            "<td>KSh " + r.unit_price.toFixed(2) + "</td><td>" + r.tax_rate + "%</td>" +
+            "<td>KSh " + r.tax_amount.toFixed(2) + "</td>" +
+            "<td>" + r.payment_method.toUpperCase() + "</td><td>" + r.cashier + "</td></tr>"
+        ).join("");
+
+        document.getElementById("taxMonthExport").innerHTML =
+            "<button onclick=\"exportTaxMonthCSV('" + month + "')\" style=\"background:#2e7d32;color:white;padding:8px 16px;border:none;border-radius:5px;cursor:pointer\">Export CSV</button>";
+    } catch (e) {
+        document.getElementById("taxMonthInfo").textContent = "Error: " + e.message;
+        tbody.innerHTML = "<tr><td colspan=\"9\" style=\"color:#d32f2f\">" + e.message + "</td></tr>";
+    }
+}
+
+
+async function exportTaxMonthCSV(month) {
+    try {
+        const data = await apiCall("/tax/archive/month/" + month + "?limit=100000");
+        let csv = "Receipt,Date,Product,Qty,Unit Price,Tax Rate,Tax Amount,Payment,Cashier\n";
+        data.rows.forEach(r => {
+            csv += [r.receipt_no, r.created_at, '"' + r.product_name + '"', r.quantity,
+                    r.unit_price, r.tax_rate, r.tax_amount, r.payment_method, r.cashier].join(",") + "\n";
+        });
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tax_archive_" + month + ".csv";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+    } catch (e) {
+        alert("Export failed: " + e.message);
     }
 }

@@ -154,3 +154,68 @@ async def archive_verify(current_user=Depends(get_current_user), db: Session = D
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     return tax_archiver.verify_chain()
+
+
+
+# ============================================================
+#  View a single archived month's actual rows
+# ============================================================
+
+@router.get("/archive/month/{month}")
+async def archive_month_rows(
+    month: str,
+    limit: int = 200,
+    offset: int = 0,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Decompress and return the individual tax rows for one archived month.
+
+    Month format: YYYY-MM (e.g. 2025-03)
+    Paginated via ?limit=200&offset=0
+    """
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if len(month) != 7 or month[4] != "-":
+        raise HTTPException(status_code=400, detail="Invalid month format (use YYYY-MM)")
+
+    import gzip
+    import json
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT month, row_count, total_tax, data_blob, sha256, created_at
+            FROM tax_ledger_archive
+            WHERE month = ?
+        """, (month,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Month {month} not found in archive")
+
+    month_name, row_count, total_tax, blob, sha, archived_at = row
+
+    try:
+        raw = gzip.decompress(blob)
+        rows = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to decompress archive: {e}")
+
+    # Paginate
+    total_rows = len(rows)
+    page = rows[offset:offset + limit]
+
+    return {
+        "month": month_name,
+        "total_rows": total_rows,
+        "total_tax": round(total_tax, 2),
+        "archived_at": archived_at,
+        "sha256_short": sha[:16] + "...",
+        "offset": offset,
+        "limit": limit,
+        "returned": len(page),
+        "rows": page,
+    }
