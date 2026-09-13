@@ -92,3 +92,10 @@ logs/*.txt
 
 # Legacy wrong-path log folder
 backend/logs/
+
+# Temp scripts
+_clean.py
+_seed.py
+_fix.py
+_write.py
+_check.py
