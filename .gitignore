@@ -107,3 +107,19 @@ _profit_payload.html
 
 # External docs (kept separately from project)
 # Docs live at: C:\Users\<User>\Safari-POS-Pro-Docs\
+
+# Documentation & Guides — never commit (contains full system blueprint)
+docs/*.md
+docs/*.html
+docs/*.pdf
+Safari-POS-Pro-Book.*
+CLIENT_GUIDE.md
+DEVELOPER_GUIDE.md
+TROUBLESHOOTING.md
+PHONE_SETUP_GUIDE.md
+*GUIDE*.md
+*Book*.html
+*Book*.pdf
+Safari POS Pro Delivery/
+Safari-POS-Pro-Docs/
+Safari-POS-Pro.ico
