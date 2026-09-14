@@ -878,7 +878,7 @@ function buildReceiptHtml(sale, isReprint) {
         "</table><hr>" +
         "<p style='font-size:10px'>Payment: " + sale.payment_method.toUpperCase() + "</p>" +
         "<p style='font-size:10px'>Served by: " + (authManager.getUser() ? authManager.getUser().name : "N/A") + "</p>" +
-        "<div class='footer'><p>" + (bs.receipt_footer || "") + "</p><hr><p style='font-size:9px'>A = Taxable | B = Non-Taxable</p></div>" +
+        "<div class='footer'>" + "<p>" + (bs.receipt_footer || "") + "</p>" + "<hr><p style='font-size:9px'>A = Taxable | B = Non-Taxable</p>" + "<p style='font-size:8px;color:#888;margin-top:8px'>&copy; 2026 Safari Softwares &mdash; From Vision to Version</p>" + "</div>" +
         "</body></html>";
 }
 
@@ -1087,7 +1087,7 @@ function _printReceiptObject(receipt, settings, showReprintBanner) {
         "</table><hr>" +
         "<p style='font-size:11px'>Payment: " + receipt.payment_method.toUpperCase() + "</p>" +
         "<p style='font-size:11px'>Served by: " + (receipt.cashier || "N/A") + "</p>" +
-        "<p style='font-size:9px'>A = Taxable | B = Non-Taxable</p>" +
+        "<p style='font-size:9px'>A = Taxable | B = Non-Taxable</p>" + "<p style='font-size:8px;color:#888;margin-top:8px'>&copy; 2026 Safari Softwares &mdash; From Vision to Version</p>" +
         "<button class='cb' onclick='window.close()'>Close</button></body></html>";
 
     const pw = window.open("", "Reprint", "width=400,height=600");
