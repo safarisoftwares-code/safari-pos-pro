@@ -103,3 +103,7 @@ _check.py
 # Debug payloads
 _profit_payload.html
 *_payload.html
+
+
+# External docs (kept separately from project)
+# Docs live at: C:\Users\<User>\Safari-POS-Pro-Docs\
