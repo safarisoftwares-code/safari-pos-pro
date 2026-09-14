@@ -84,6 +84,14 @@ def save_pdf_archive(job_type, html_payload, timestamp=None):
     except ImportError as e:
         return False, f"playwright not installed: {e}"
 
+    # Point Playwright to bundled Chromium (when running as frozen EXE)
+    import sys
+    if getattr(sys, "frozen", False):
+        import os as _os
+        bundled_browsers = _os.path.join(sys._MEIPASS, "ms-playwright")
+        if _os.path.exists(bundled_browsers):
+            _os.environ["PLAYWRIGHT_BROWSERS_PATH"] = bundled_browsers
+
     try:
         base = _get_pdf_archive_folder()
         date_folder = now.strftime("%Y%m%d")

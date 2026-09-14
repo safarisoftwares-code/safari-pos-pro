@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=3.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.2">
 </head>
 <body>
     <div class="dashboard-container">
@@ -267,7 +267,29 @@
 
                 <div class="card"><h3 class="card-title">Barcode Scanner Setup</h3><p style="font-size:13px;color:#666">USB scanners are plug-and-play.</p><div class="form-group"><label>Test Scanner</label><input type="text" id="scannerTest" placeholder="Scan here..." style="width:100%;max-width:400px"></div></div>
                 <div class="card"><h3 class="card-title">M-Pesa Configuration (Optional)</h3><p style="font-size:13px;color:#666">Cash works without M-Pesa.</p><div class="form-group"><label><input type="checkbox" id="mpesaEnabled"> Enable M-Pesa</label></div><div class="form-group"><label>Consumer Key</label><input type="text" id="mpesaConsumerKey"></div><div class="form-group"><label>Consumer Secret</label><input type="text" id="mpesaConsumerSecret"></div><div class="form-group"><label>Passkey</label><input type="text" id="mpesaPasskey"></div><div class="form-group"><label>Shortcode</label><input type="text" id="mpesaShortcode"></div><button class="btn btn-primary" onclick="saveMpesaSettings()" style="width:auto;padding:10px 20px">Save M-Pesa</button></div>
-                <div class="card"><h3 class="card-title">Expiry Protection</h3><div class="form-group"><label><input type="checkbox" id="blockExpired"> Block expired items</label></div><div class="form-group"><label><input type="checkbox" id="warnExpiring"> Warn expiring soon</label></div><button class="btn btn-primary" onclick="saveExpirySettings()" style="width:auto;padding:10px 20px">Save Expiry Settings</button></div>
+                <div class="card">
+                    <h3 class="card-title">Expiry Tracking</h3>
+                    <p style="font-size:12px;color:#666;margin-bottom:15px">Enable expiry date tracking for products that expire (food, medicine). Turn off for shops selling hardware, tools, or non-perishable goods.</p>
+
+                    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+                        <input type="checkbox" id="enableExpiryTracking" checked style="margin-top:4px;flex-shrink:0;width:18px;height:18px;cursor:pointer">
+                        <label for="enableExpiryTracking" style="cursor:pointer;font-weight:600;font-size:14px">Enable Expiry Tracking</label>
+                    </div>
+                    <p style="font-size:11px;color:#999;margin:0 0 15px 28px">When OFF, expiry fields and warnings are hidden across the app.</p>
+
+                    <div id="expirySubOptions">
+                        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+                            <input type="checkbox" id="blockExpired" style="margin-top:3px;flex-shrink:0;width:16px;height:16px;cursor:pointer">
+                            <label for="blockExpired" style="cursor:pointer;font-size:14px">Block sale of expired items</label>
+                        </div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:15px">
+                            <input type="checkbox" id="warnExpiring" style="margin-top:3px;flex-shrink:0;width:16px;height:16px;cursor:pointer">
+                            <label for="warnExpiring" style="cursor:pointer;font-size:14px">Warn when items are close to expiring</label>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="saveExpirySettings()" style="width:auto;padding:10px 20px">Save Expiry Settings</button>
+                </div>
                 <div class="card"><h3 class="card-title">Tax Rate</h3><div class="form-group"><label>Default Tax Rate (%)</label><input type="number" id="defaultTaxRate" value="16"></div><button class="btn btn-primary" onclick="updateTaxRate()" style="width:auto;padding:10px 20px">Save Tax Rate</button></div>
 
                 <div class="card" style="border: 2px solid #d32f2f;">
@@ -281,11 +303,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=3.1"></script>
-    <script src="/static/js/app.js?v=3.1"></script>
-    <script src="/static/js/main.js?v=3.1"></script>
-    <script src="/static/js/analytics.js?v=3.1"></script>
-    <script src="/static/js/tax.js?v=3.1"></script>
+    <script src="/static/js/auth.js?v=3.2"></script>
+    <script src="/static/js/app.js?v=3.2"></script>
+    <script src="/static/js/main.js?v=3.2"></script>
+    <script src="/static/js/analytics.js?v=3.2"></script>
+    <script src="/static/js/tax.js?v=3.2"></script>
 
     <!-- ============================== MODALS ============================== -->
 

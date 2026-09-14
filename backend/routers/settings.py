@@ -48,6 +48,7 @@ async def get_settings(current_user=Depends(get_current_user), db: Session = Dep
         "block_expired": get_setting("block_expired") or "false",
         "backup_location": get_setting("backup_location") or "",
         "warn_expiring": get_setting("warn_expiring") or "false",
+        "enable_expiry_tracking": get_setting("enable_expiry_tracking") or "true",
     }
 
 
@@ -77,6 +78,7 @@ async def update_business_info(data: dict, current_user=Depends(get_current_user
         "block_expired", "warn_expiring", "backup_location",
         "mpesa_enabled", "mpesa_consumer_key", "mpesa_consumer_secret",
         "mpesa_passkey", "mpesa_shortcode",
+        "enable_expiry_tracking",
     ]
 
     for key in editable_keys:

@@ -368,9 +368,9 @@ function renderPOSProducts(list) {
             const expiry = new Date(p.expiry_date);
             const daysLeft = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
             if (daysLeft < 0) {
-                expiryBar = "<div style=\"background:#ffe5e5;color:#b71c1c;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRED</div>";
+                expiryBar = "<div class=\"expiry-bar\" style=\"background:#ffe5e5;color:#b71c1c;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRED</div>";
             } else if (daysLeft <= 7) {
-                expiryBar = "<div style=\"background:#fff8e1;color:#e65100;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRES IN " + daysLeft + " DAYS</div>";
+                expiryBar = "<div class=\"expiry-bar\" style=\"background:#fff8e1;color:#e65100;text-align:center;padding:3px 0;font-size:9px;font-weight:bold;border-radius:0 0 8px 8px;margin-top:5px\">EXPIRES IN " + daysLeft + " DAYS</div>";
             }
         }
         return "<div class=\"product-card\" onclick=\"addToCart(" + p.id + ")\">" +
@@ -1123,6 +1123,12 @@ document.addEventListener("DOMContentLoaded", () => {
         updateCart();
     });
 
+    // Expiry tracking toggle - show/hide sub-options
+    safeOn("enableExpiryTracking", "change", function () {
+        const sub = document.getElementById("expirySubOptions");
+        if (sub) sub.style.display = this.checked ? "block" : "none";
+    });
+
     // Ensure cart displays initially
     updateCart();
 });
@@ -1625,21 +1631,46 @@ async function loadExpirySettings() {
     try {
         const s = await apiCall("/settings/");
         const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+        const enabled = s.enable_expiry_tracking !== "false";
+        setCheck("enableExpiryTracking", enabled);
         setCheck("blockExpired", s.block_expired === "true");
         setCheck("warnExpiring", s.warn_expiring === "true");
+        const subOptions = document.getElementById("expirySubOptions");
+        if (subOptions) subOptions.style.display = enabled ? "block" : "none";
+        applyExpiryVisibility(enabled);
     } catch (err) {
         console.error("[loadExpirySettings]", err);
     }
 }
 
+function applyExpiryVisibility(enabled) {
+    ["productExpiry", "editProductExpiry"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const grp = el.closest(".form-group");
+            if (grp) grp.style.display = enabled ? "block" : "none";
+        }
+    });
+    if (enabled) {
+        document.body.classList.remove("hide-expiry");
+    } else {
+        document.body.classList.add("hide-expiry");
+    }
+}
+
 async function saveExpirySettings() {
+    const enabledEl = document.getElementById("enableExpiryTracking");
+    const enabled = enabledEl ? enabledEl.checked : true;
     const payload = {
+        enable_expiry_tracking: enabled ? "true" : "false",
         block_expired: document.getElementById("blockExpired").checked ? "true" : "false",
         warn_expiring: document.getElementById("warnExpiring").checked ? "true" : "false",
     };
     try {
         await apiCall("/settings/business", "PUT", payload);
-        showSuccess("Expiry settings saved!");
+        await loadBusinessSettings();
+        applyExpiryVisibility(enabled);
+        showSuccess("Expiry settings saved");
     } catch (err) {
         showError(err);
     }

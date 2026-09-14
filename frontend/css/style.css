@@ -342,3 +342,9 @@ body {
     }
     .cart-container { height: auto; }
 }
+
+
+/* Hide expiry-related UI when expiry tracking is disabled */
+body.hide-expiry .expiry-bar {
+    display: none !important;
+}
