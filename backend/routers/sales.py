@@ -389,23 +389,23 @@ async def receipt_qr(receipt_no: str, db: Session = Depends(get_db)):
 
     # Build QR text
     qr_text = (
-        f"SAFARI POS RECEIPT\n"
-        f"Receipt: {sale.receipt_no}\n"
-        f"Date: {sale.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"Store: {store_name} | Reg: {reg_no}\n"
-        f"Cashier: {sale.cashier_name or 'Unknown'}\n"
-        f"PIN: {tax_pin}\n"
-        f"Total: KSh {sale.total_amount:.2f}\n"
-        f"Tax: KSh {sale.tax_amount:.2f}\n"
-        f"Payment: {sale.payment_method.upper()}"
+        f"PIN: {tax_pin} | "
+        f"SAFARI POS RECEIPT | "
+        f"{sale.receipt_no} | "
+        f"{sale.created_at.strftime('%Y-%m-%d %H:%M')} | "
+        f"{store_name} {reg_no} | "
+        f"{sale.cashier_name or 'Unknown'} | "
+        f"KSh {sale.total_amount:.2f} | "
+        f"Tax KSh {sale.tax_amount:.2f} | "
+        f"{sale.payment_method.upper()}"
     )
 
     # Generate QR
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=20,
-        border=3,
+        box_size=15,
+        border=2,
     )
     qr.add_data(qr_text)
     qr.make(fit=True)

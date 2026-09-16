@@ -331,7 +331,6 @@ async function loadProducts() {
                 "<td style=\"text-align:center;color:#666;font-size:11px\">" + (p.low_stock_alert || 5) + "</td>" +
                 "<td>" +
                 "<button onclick=\"openEditProductModal(" + p.id + ")\" style=\"padding:5px 10px;font-size:10px;margin-right:3px;background:#2e7d32;color:white;border:none;border-radius:3px;cursor:pointer\">Edit</button>" +
-                "<button onclick=\"openStockModal(" + p.id + ")\" style=\"padding:5px 10px;font-size:10px;margin-right:3px;cursor:pointer\">Stock</button>" +
                 "<button onclick=\"deleteProduct(" + p.id + ")\" style=\"padding:5px 10px;font-size:10px;color:red;cursor:pointer\">Delete</button>" +
                 "</td></tr>";
         }).join("");
