@@ -765,53 +765,191 @@ async function confirmMpesa() {
     const phone = normalizePhone(phoneRaw);
 
     if (!phone || phone.length !== 12) {
-        alert("INVALID PHONE NUMBER!\n\nExamples:\n0741676521\n741676521\n0112168732");
+        alert("INVALID PHONE NUMBER!\n\nEnter a valid 10-digit number.\nExamples:\n0741676521\n741676521");
         return;
     }
 
+    // Calculate total
     let total = 0;
     cart.forEach(i => { total += i.quantity * i.unit_price; });
     total -= (total * discount / 100);
 
     closeModal("paymentModal");
-    const sec = document.getElementById("mpesaPhoneSection");
-    if (sec) sec.style.display = "none";
-    const mp = document.getElementById("mpesaPhone");
-    if (mp) mp.value = "";
+    document.getElementById("mpesaPhoneSection").style.display = "none";
 
+    // Step 1: Create pending sale
+    let sale;
     try {
-        await apiCall("/mpesa/stk-push", "POST", {
-            phone_number: phone,
-            amount: total,
-            receipt_no: "INV-" + Date.now(),
-        });
-        alert("M-Pesa prompt sent to " + phone + "!");
-    } catch (err) {
-        showError(err);
-        return;
-    }
-
-    try {
-        const sale = await apiCall("/sales/", "POST", {
+        sale = await apiCall("/sales/pending", "POST", {
             items: cart.map(i => ({
                 product_id: i.product_id,
                 quantity: i.quantity,
                 unit_price: i.unit_price,
             })),
-            payment_method: "mpesa",
             discount: discount,
+            phone_number: phone,
         });
-        printReceipt(sale);
+    } catch (e) {
+        document.getElementById("mpesaPhone").value = "";
+        showError(e);
+        return;
+    }
+
+    // Step 2: Send STK push
+    try {
+        await apiCall("/mpesa/stk-push", "POST", {
+            phone_number: phone,
+            amount: total,
+            receipt_no: sale.receipt_no,
+        });
+    } catch (e) {
+        // Mark sale as failed
+        try { await apiCall("/sales/" + sale.id + "/fail?reason=failed", "POST"); } catch (_) {}
+        document.getElementById("mpesaPhone").value = "";
+        showError(e);
+        return;
+    }
+
+    document.getElementById("mpesaPhone").value = "";
+
+    // Step 3: Show waiting modal
+    document.getElementById("waitingTotal").textContent = "KSh " + total.toFixed(2);
+    document.getElementById("waitingSpinner").style.display = "block";
+    document.getElementById("waitingStatus").textContent = "Waiting for customer to enter PIN...";
+    document.getElementById("waitingStatus").style.color = "#666";
+    document.getElementById("waitingResult").style.display = "none";
+    document.getElementById("waitingResult").innerHTML = "";
+    document.getElementById("waitingCancelBtn").style.display = "block";
+    openModal("paymentWaitingModal");
+
+    // Step 4: Poll for status
+    const startedAt = Date.now();
+    const timeoutMs = 90000; // 90 seconds
+    const saleId = sale.id;
+
+    const pollInterval = setInterval(async () => {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, Math.ceil((timeoutMs - elapsed) / 1000));
+        document.getElementById("waitingCountdown").textContent = remaining + "s remaining";
+
+        try {
+            const status = await apiCall("/sales/" + saleId + "/status");
+
+            if (status.payment_status === "paid") {
+                clearInterval(pollInterval);
+                showMpesaSuccess(status, total);
+                return;
+            }
+
+            if (status.payment_status === "failed" || status.payment_status === "timeout") {
+                clearInterval(pollInterval);
+                showMpesaFailure(status.payment_status);
+                return;
+            }
+
+            // Still pending, keep polling
+        } catch (e) {
+            // Ignore network errors during polling
+        }
+
+        if (elapsed >= timeoutMs) {
+            clearInterval(pollInterval);
+            // Mark as timeout on backend
+            try { await apiCall("/sales/" + saleId + "/fail?reason=timeout", "POST"); } catch (_) {}
+            showMpesaFailure("timeout");
+        }
+    }, 2000);
+
+    // Store interval so cancel button can clear it
+    window._mpesaPollInterval = pollInterval;
+    window._mpesaCurrentSaleId = saleId;
+}
+
+
+function showMpesaSuccess(status, total) {
+    document.getElementById("waitingSpinner").style.display = "none";
+    document.getElementById("waitingCountdown").textContent = "";
+    document.getElementById("waitingStatus").textContent = "Payment Confirmed!";
+    document.getElementById("waitingStatus").style.color = "#2e7d32";
+    document.getElementById("waitingCancelBtn").style.display = "none";
+
+    const resultEl = document.getElementById("waitingResult");
+    resultEl.style.display = "block";
+    resultEl.style.background = "#e8f5e9";
+    resultEl.style.border = "2px solid #2e7d32";
+    resultEl.innerHTML = "<div style='font-size:40px;color:#2e7d32;margin-bottom:10px'>&#10004;</div>" +
+        "<div style='font-weight:bold;font-size:16px;color:#2e7d32'>PAID</div>" +
+        "<div style='font-size:13px;color:#555;margin-top:6px'>Receipt: " + status.receipt_no + "</div>" +
+        (status.mpesa_receipt ? "<div style='font-size:12px;color:#666'>M-Pesa Ref: " + status.mpesa_receipt + "</div>" : "");
+
+    showSuccess("Payment confirmed!");
+
+    // Step 5: After 2.5 seconds, close modal, clear cart, print receipt
+    setTimeout(async () => {
+        closeModal("paymentWaitingModal");
+
+        // Fetch full sale for receipt
+        try {
+            const receipts = await apiCall("/sales/history");
+            const receipt = receipts.find(r => r.receipt_no === status.receipt_no);
+            if (receipt) {
+                printReceipt(receipt);
+            }
+        } catch (e) {
+            console.warn("Could not fetch receipt for printing", e);
+        }
+
         cart = [];
         discount = 0;
-        const di = document.getElementById("discountInput");
-        if (di) di.value = 0;
+        const discEl = document.getElementById("discountInput");
+        if (discEl) discEl.value = 0;
         updateCart();
-        await loadProductsForPOS();
-        await loadDashboard();
-    } catch (err) {
-        showError(err);
+        loadProductsForPOS();
+        loadDashboard();
+    }, 2500);
+}
+
+
+function showMpesaFailure(reason) {
+    document.getElementById("waitingSpinner").style.display = "none";
+    document.getElementById("waitingCountdown").textContent = "";
+    document.getElementById("waitingStatus").textContent = reason === "timeout" ? "Payment Timed Out" : "Payment Failed";
+    document.getElementById("waitingStatus").style.color = "#d32f2f";
+    document.getElementById("waitingCancelBtn").style.display = "block";
+    document.getElementById("waitingCancelBtn").textContent = "Close";
+
+    const resultEl = document.getElementById("waitingResult");
+    resultEl.style.display = "block";
+    resultEl.style.background = "#fdeaea";
+    resultEl.style.border = "2px solid #d32f2f";
+    resultEl.innerHTML = "<div style='font-size:40px;color:#d32f2f;margin-bottom:10px'>&#10008;</div>" +
+        "<div style='font-weight:bold;font-size:16px;color:#d32f2f'>" + (reason === "timeout" ? "TIMED OUT" : "FAILED") + "</div>" +
+        "<div style='font-size:13px;color:#555;margin-top:6px'>" +
+        (reason === "timeout"
+            ? "The customer did not enter their PIN in time."
+            : "The payment was declined or cancelled by the customer.") + "</div>" +
+        "<div style='font-size:12px;color:#666;margin-top:8px'>Cart is preserved. You can retry.</div>";
+}
+
+
+function cancelMpesaWait() {
+    // Stop polling
+    if (window._mpesaPollInterval) {
+        clearInterval(window._mpesaPollInterval);
+        window._mpesaPollInterval = null;
     }
+
+    // If the modal is still showing a pending state, mark sale as failed (canceled)
+    const statusText = document.getElementById("waitingStatus").textContent;
+    if (statusText && statusText.includes("Waiting")) {
+        const saleId = window._mpesaCurrentSaleId;
+        if (saleId) {
+            apiCall("/sales/" + saleId + "/fail?reason=failed", "POST").catch(function(){});
+        }
+    }
+
+    closeModal("paymentWaitingModal");
+    window._mpesaCurrentSaleId = null;
 }
 
 
@@ -1787,6 +1925,8 @@ async function loadMpesaSettings() {
         setVal("mpesaConsumerSecret", s.mpesa_consumer_secret);
         setVal("mpesaPasskey", s.mpesa_passkey);
         setVal("mpesaShortcode", s.mpesa_shortcode);
+        setVal("mpesaShopId", s.mpesa_shop_id);
+        setCheck("mpesaMockMode", s.mpesa_mock_mode === "true");
     } catch (err) {
         console.error("[loadMpesaSettings]", err);
     }
@@ -1799,6 +1939,8 @@ async function saveMpesaSettings() {
         mpesa_consumer_secret: document.getElementById("mpesaConsumerSecret").value,
         mpesa_passkey: document.getElementById("mpesaPasskey").value,
         mpesa_shortcode: document.getElementById("mpesaShortcode").value,
+        mpesa_shop_id: document.getElementById("mpesaShopId") ? document.getElementById("mpesaShopId").value.trim() : "",
+        mpesa_mock_mode: document.getElementById("mpesaMockMode") && document.getElementById("mpesaMockMode").checked ? "true" : "false",
     };
     try {
         await apiCall("/settings/business", "PUT", payload);

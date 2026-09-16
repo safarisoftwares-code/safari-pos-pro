@@ -10,7 +10,7 @@ from routers import (
     backup, settings, purchase_orders, analytics, mpesa, tax, printers,
     print_queue,
 )
-from services import tax_archiver, print_processor
+from services import tax_archiver, print_processor, mpesa_poller
 import os
 import sys
 from datetime import datetime
@@ -118,6 +118,12 @@ async def shutdown_event():
         print("[print-queue] Background worker signalled to stop")
     except Exception as e:
         print(f"[print-queue] Shutdown warning: {e}")
+    try:
+        from services import mpesa_poller
+        mpesa_poller.stop_worker()
+        print("[mpesa-poller] Background worker signalled to stop")
+    except Exception as e:
+        print(f"[mpesa-poller] Shutdown warning: {e}")
 
 
 @app.on_event("startup")
@@ -224,6 +230,16 @@ async def startup_event():
         print("[print-queue] Background worker started")
     except Exception as e:
         print(f"[print-queue] WARNING: Failed to start worker: {e}")
+
+    # ------------------------------------------------------------------
+    #  v4.0 M-Pesa: Start relay poller
+    # ------------------------------------------------------------------
+    try:
+        from services import mpesa_poller
+        mpesa_poller.start_worker()
+        print("[mpesa-poller] Background worker started")
+    except Exception as e:
+        print(f"[mpesa-poller] WARNING: Failed to start worker: {e}")
 
     # Ensure admin exists
     db = SessionLocal()

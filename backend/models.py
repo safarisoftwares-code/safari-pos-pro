@@ -73,6 +73,11 @@ class Sale(Base):
     payment_method = Column(String, nullable=False)
     payment_ref = Column(String, nullable=True)
     status = Column(String, default="completed")
+    # v4.0 M-Pesa relay fields
+    payment_status = Column(String, default="paid")  # pending | paid | failed | timeout | completed
+    mpesa_checkout_id = Column(String, nullable=True)  # Safaricom CheckoutRequestID
+    mpesa_receipt = Column(String, nullable=True)  # M-Pesa receipt number from callback
+    paid_at = Column(DateTime, nullable=True)  # when payment was confirmed
     created_at = Column(DateTime, default=datetime.now)
     customer = relationship("Customer", back_populates="sales")
     cashier = relationship("User", back_populates="sales")

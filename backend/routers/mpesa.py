@@ -30,6 +30,11 @@ async def stk_push(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    Send an STK push to the customer's phone.
+    Also saves CheckoutRequestID against the pending sale for later matching.
+    If mpesa_mock_mode is on, simulates a successful callback after 5 seconds.
+    """
     enabled = get_mpesa_setting("mpesa_enabled")
     if enabled != "true":
         raise HTTPException(
@@ -37,6 +42,68 @@ async def stk_push(
             detail="M-Pesa is not enabled. Contact admin.",
         )
 
+    # Find the pending sale by receipt_no
+    from models import Sale
+    sale = db.query(Sale).filter(Sale.receipt_no == request.receipt_no).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail=f"Pending sale {request.receipt_no} not found")
+
+    # Check mock mode
+    mock_mode = get_mpesa_setting("mpesa_mock_mode") == "true"
+
+    if mock_mode:
+        # Save a fake CheckoutRequestID and generate a mock callback
+        mock_checkout_id = f"ws_CO_MOCK_{int(__import__('time').time())}"
+        sale.mpesa_checkout_id = mock_checkout_id
+        db.commit()
+
+        # Fire a mock callback to the Cloudflare relay after 5 seconds
+        try:
+            import threading
+            import requests
+            shop_id = get_mpesa_setting("mpesa_shop_id") or "testshop"
+
+            def _deliver_mock():
+                __import__('time').sleep(5)
+                mock_payload = {
+                    "Body": {
+                        "stkCallback": {
+                            "MerchantRequestID": "mock-merchant-" + mock_checkout_id,
+                            "CheckoutRequestID": mock_checkout_id,
+                            "ResultCode": 0,
+                            "ResultDesc": "The service request is processed successfully.",
+                            "CallbackMetadata": {
+                                "Item": [
+                                    {"Name": "Amount", "Value": int(request.amount)},
+                                    {"Name": "MpesaReceiptNumber", "Value": "MOCK" + str(int(__import__('time').time()))},
+                                    {"Name": "TransactionDate", "Value": int(__import__('time').time())},
+                                    {"Name": "PhoneNumber", "Value": request.phone_number},
+                                ]
+                            }
+                        }
+                    }
+                }
+                try:
+                    requests.post(
+                        f"https://relay.safari-pos.co.ke/callback/{shop_id}",
+                        json=mock_payload,
+                        timeout=10,
+                    )
+                    print(f"[mpesa-mock] Sent mock callback for sale {sale.id}")
+                except Exception as e:
+                    print(f"[mpesa-mock] Failed to send: {e}")
+
+            threading.Thread(target=_deliver_mock, daemon=True).start()
+        except Exception as e:
+            print(f"[mpesa-mock] Setup error: {e}")
+
+        return {
+            "status": "success",
+            "message": "MOCK: STK push simulated. Callback will arrive in ~5s.",
+            "data": {"CheckoutRequestID": mock_checkout_id, "mock": True},
+        }
+
+    # Real M-Pesa flow
     consumer_key = get_mpesa_setting("mpesa_consumer_key")
     consumer_secret = get_mpesa_setting("mpesa_consumer_secret")
     passkey = get_mpesa_setting("mpesa_passkey")
@@ -52,7 +119,7 @@ async def stk_push(
     mpesa_service.consumer_secret = consumer_secret
     mpesa_service.passkey = passkey
     mpesa_service.shortcode = shortcode
-    mpesa_service.access_token = None  # force refresh
+    mpesa_service.access_token = None
 
     try:
         response = mpesa_service.stk_push(
@@ -60,6 +127,14 @@ async def stk_push(
             request.amount,
             request.receipt_no,
         )
+
+        # Save CheckoutRequestID on the pending sale
+        checkout_id = response.get("CheckoutRequestID")
+        if checkout_id:
+            sale.mpesa_checkout_id = checkout_id
+            db.commit()
+            print(f"[mpesa] Saved CheckoutID={checkout_id} to sale {sale.id}")
+
         return {
             "status": "success",
             "message": "STK push sent to customer phone",

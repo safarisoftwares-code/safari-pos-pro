@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=4.1">
 </head>
 <body>
     <div class="dashboard-container">
@@ -271,7 +271,10 @@
                 </div>
 
                 <div class="card"><h3 class="card-title">Barcode Scanner Setup</h3><p style="font-size:13px;color:#666">USB scanners are plug-and-play.</p><div class="form-group"><label>Test Scanner</label><input type="text" id="scannerTest" placeholder="Scan here..." style="width:100%;max-width:400px"></div></div>
-                <div class="card"><h3 class="card-title">M-Pesa Configuration (Optional)</h3><p style="font-size:13px;color:#666">Cash works without M-Pesa.</p><div class="form-group"><label><input type="checkbox" id="mpesaEnabled"> Enable M-Pesa</label></div><div class="form-group"><label>Consumer Key</label><input type="text" id="mpesaConsumerKey"></div><div class="form-group"><label>Consumer Secret</label><input type="text" id="mpesaConsumerSecret"></div><div class="form-group"><label>Passkey</label><input type="text" id="mpesaPasskey"></div><div class="form-group"><label>Shortcode</label><input type="text" id="mpesaShortcode"></div><button class="btn btn-primary" onclick="saveMpesaSettings()" style="width:auto;padding:10px 20px">Save M-Pesa</button></div>
+                <div class="card"><h3 class="card-title">M-Pesa Configuration (Optional)</h3><p style="font-size:13px;color:#666">Cash works without M-Pesa.</p><div class="form-group"><label><input type="checkbox" id="mpesaEnabled"> Enable M-Pesa</label></div><div class="form-group"><label>Consumer Key</label><input type="text" id="mpesaConsumerKey"></div><div class="form-group"><label>Consumer Secret</label><input type="text" id="mpesaConsumerSecret"></div><div class="form-group"><label>Passkey</label><input type="text" id="mpesaPasskey"></div><div class="form-group"><label>Shortcode</label><input type="text" id="mpesaShortcode"></div>
+                    <div class="form-group"><label>Shop ID (from Safari Softwares)</label><input type="text" id="mpesaShopId" placeholder="e.g. folksmed-01"></div>
+                    <div class="form-group"><label><input type="checkbox" id="mpesaMockMode"> Use Mock M-Pesa (for testing without Safaricom)</label></div>
+                    <button class="btn btn-primary" onclick="saveMpesaSettings()" style="width:auto;padding:10px 20px">Save M-Pesa</button></div>
                 <div class="card">
                     <h3 class="card-title">Expiry Tracking</h3>
                     <p style="font-size:12px;color:#666;margin-bottom:15px">Enable expiry date tracking for products that expire (food, medicine). Turn off for shops selling hardware, tools, or non-perishable goods.</p>
@@ -308,11 +311,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=4.0"></script>
-    <script src="/static/js/app.js?v=4.0"></script>
-    <script src="/static/js/main.js?v=4.0"></script>
-    <script src="/static/js/analytics.js?v=4.0"></script>
-    <script src="/static/js/tax.js?v=4.0"></script>
+    <script src="/static/js/auth.js?v=4.1"></script>
+    <script src="/static/js/app.js?v=4.1"></script>
+    <script src="/static/js/main.js?v=4.1"></script>
+    <script src="/static/js/analytics.js?v=4.1"></script>
+    <script src="/static/js/tax.js?v=4.1"></script>
 
     <!-- ============================== MODALS ============================== -->
 
@@ -463,6 +466,25 @@
                 </table>
             </div>
             <div id="taxMonthExport" style="margin-top:15px"></div>
+        </div>
+    </div>
+
+
+    <div id="paymentWaitingModal" class="modal">
+        <div class="modal-content" style="max-width:450px;text-align:center">
+            <h3 style="color:#8b4513;margin-bottom:15px">M-Pesa Payment</h3>
+            <p style="font-size:16px;font-weight:bold;margin-bottom:20px">Total: <span id="waitingTotal">KSh 0.00</span></p>
+
+            <div id="waitingSpinner" style="margin:30px auto;width:60px;height:60px;border:5px solid #f0f0f0;border-top-color:#8b4513;border-radius:50%;animation:spin 1s linear infinite"></div>
+
+            <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+            <p id="waitingStatus" style="font-size:14px;color:#666;margin-bottom:10px">Waiting for customer to enter PIN...</p>
+            <p id="waitingCountdown" style="font-size:12px;color:#999;margin-bottom:20px"></p>
+
+            <div id="waitingResult" style="display:none;padding:15px;border-radius:8px;margin-bottom:20px"></div>
+
+            <button id="waitingCancelBtn" onclick="cancelMpesaWait()" style="width:100%;padding:12px;background:#d32f2f;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:bold">Cancel</button>
         </div>
     </div>
 

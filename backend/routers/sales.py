@@ -5,6 +5,7 @@ from database import get_db, DB_PATH
 from models import Sale, SaleItem, Product, User
 from schemas import SaleCreate
 from auth import get_current_user
+from pydantic import BaseModel
 import sqlite3
 
 router = APIRouter()
@@ -453,3 +454,206 @@ async def receipt_barcode(receipt_no: str, db: Session = Depends(get_db)):
         return Response(content=buf.getvalue(), media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Barcode generation failed: {e}")
+
+
+
+# ============================================================
+#  M-Pesa Relay Flow: pending / confirm / fail
+# ============================================================
+
+class PendingSaleItem(BaseModel):
+    product_id: int
+    quantity: int
+    unit_price: float
+
+
+class PendingSaleRequest(BaseModel):
+    items: list[PendingSaleItem]
+    discount: float = 0
+    phone_number: str = ""
+    customer_id: int | None = None
+
+
+@router.post("/pending")
+async def create_pending_sale(
+    req: PendingSaleRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a pending M-Pesa sale. Does NOT decrement stock or write tax ledger.
+    Called when cashier sends an STK push. Sale is finalized only on confirm.
+    """
+    subtotal = 0.0
+    total_tax = 0.0
+    items_data = []
+
+    for item in req.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+        if product.stock < item.quantity:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
+
+        line_total = item.quantity * item.unit_price
+        if product.tax_rate and product.tax_rate > 0:
+            rate = product.tax_rate / 100
+            line_tax = line_total - (line_total / (1 + rate))
+        else:
+            line_tax = 0.0
+
+        subtotal += line_total
+        total_tax += line_tax
+        items_data.append({
+            "product": product,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "tax_rate": product.tax_rate or 0,
+            "tax_amount": line_tax,
+            "total_price": line_total,
+        })
+
+    discount = req.discount or 0.0
+    total = subtotal - discount
+
+    sale = Sale(
+        receipt_no=generate_receipt_no(db),
+        customer_id=req.customer_id,
+        cashier_id=current_user.id,
+        cashier_name=current_user.name,
+        subtotal=subtotal,
+        tax_amount=total_tax,
+        discount=discount,
+        total_amount=total,
+        payment_method="mpesa",
+        payment_ref=req.phone_number,
+        status="pending",
+        payment_status="pending",
+    )
+    db.add(sale)
+    db.commit()
+    db.refresh(sale)
+
+    # Save items as pending (they'll be validated/deducted on confirm)
+    for item in items_data:
+        db.add(SaleItem(
+            sale_id=sale.id,
+            product_id=item["product"].id,
+            quantity=item["quantity"],
+            unit_price=item["unit_price"],
+            tax_rate=item["tax_rate"],
+            tax_amount=item["tax_amount"],
+            total_price=item["total_price"],
+        ))
+    db.commit()
+
+    return {
+        "id": sale.id,
+        "receipt_no": sale.receipt_no,
+        "total_amount": total,
+        "payment_status": "pending",
+        "message": "Sale created. Awaiting M-Pesa confirmation.",
+    }
+
+
+@router.post("/{sale_id}/confirm")
+async def confirm_sale(
+    sale_id: int,
+    mpesa_receipt: str = "",
+    db: Session = Depends(get_db),
+):
+    """
+    Called by the M-Pesa poller when Safaricom confirms a payment.
+    Decrements stock, writes tax ledger, marks sale as paid.
+    """
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    if sale.payment_status == "paid":
+        return {"message": "Sale already paid", "sale_id": sale_id}
+
+    # Decrement stock for each item
+    items = db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()
+    items_for_ledger = []
+    for item in items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product:
+            product.stock -= item.quantity
+        items_for_ledger.append({
+            "name": product.name if product else "Unknown",
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "tax_rate": item.tax_rate or 0,
+            "tax_amount": item.tax_amount or 0,
+        })
+
+    # Write tax ledger
+    _write_tax_ledger(
+        sale.receipt_no,
+        items_for_ledger,
+        sale.payment_method,
+        sale.cashier_name or "Unknown",
+        sale.created_at,
+    )
+
+    # Update sale
+    sale.payment_status = "paid"
+    sale.status = "completed"
+    sale.mpesa_receipt = mpesa_receipt or None
+    sale.paid_at = datetime.now()
+    db.commit()
+
+    return {
+        "message": "Sale confirmed and paid",
+        "sale_id": sale_id,
+        "receipt_no": sale.receipt_no,
+        "mpesa_receipt": mpesa_receipt,
+    }
+
+
+@router.post("/{sale_id}/fail")
+async def fail_sale(
+    sale_id: int,
+    reason: str = "failed",
+    db: Session = Depends(get_db),
+):
+    """
+    Mark a pending sale as failed or timeout. No stock change.
+    Called by the M-Pesa poller or frontend on error/timeout.
+    """
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    if sale.payment_status == "paid":
+        raise HTTPException(status_code=400, detail="Cannot fail a paid sale")
+
+    sale.payment_status = reason  # "failed" or "timeout"
+    sale.status = reason
+    db.commit()
+
+    return {
+        "message": f"Sale marked as {reason}",
+        "sale_id": sale_id,
+        "receipt_no": sale.receipt_no,
+    }
+
+
+@router.get("/{sale_id}/status")
+async def get_sale_status(
+    sale_id: int,
+    db: Session = Depends(get_db),
+):
+    """Frontend polls this to check if the sale has been confirmed."""
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    return {
+        "sale_id": sale.id,
+        "receipt_no": sale.receipt_no,
+        "payment_status": sale.payment_status or "paid",
+        "mpesa_receipt": sale.mpesa_receipt,
+        "paid_at": sale.paid_at.strftime("%Y-%m-%d %H:%M:%S") if sale.paid_at else None,
+    }
