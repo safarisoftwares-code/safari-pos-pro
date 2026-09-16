@@ -40,6 +40,8 @@ async def get_settings(current_user=Depends(get_current_user), db: Session = Dep
         "business_phone": get_setting("business_phone") or "",
         "business_tax_pin": get_setting("business_tax_pin") or "",
         "receipt_footer": get_setting("receipt_footer") or "Thank you! Karibu Tena!",
+        "store_name": get_setting("store_name") or "",
+        "reg_no": get_setting("reg_no") or "",
         "mpesa_enabled": get_setting("mpesa_enabled") or "false",
         "mpesa_consumer_key": get_setting("mpesa_consumer_key") or "",
         "mpesa_consumer_secret": get_setting("mpesa_consumer_secret") or "",
@@ -75,6 +77,7 @@ async def update_business_info(data: dict, current_user=Depends(get_current_user
     editable_keys = [
         "business_name", "business_po_box", "business_location",
         "business_phone", "business_tax_pin", "receipt_footer",
+        "store_name", "reg_no",
         "block_expired", "warn_expiring", "backup_location",
         "mpesa_enabled", "mpesa_consumer_key", "mpesa_consumer_secret",
         "mpesa_passkey", "mpesa_shortcode",

@@ -838,47 +838,141 @@ async function queueReceiptPrint(sale) {
 }
 
 function buildReceiptHtml(sale, isReprint) {
+    // Build item rows
     let itemsHtml = "";
+    let totalA_qty = 0, totalA_amount = 0, totalA_tax = 0;
+    let totalB_qty = 0, totalB_amount = 0;
+
     sale.items.forEach(item => {
-        const taxLabel = (item.tax_rate || 0) > 0 ? "A" : "B";
-        itemsHtml += "<tr><td>" + item.name + (item.unit ? " (" + item.unit + ")" : "") + "</td>" +
-            "<td style='text-align:center'>" + item.quantity + "</td>" +
-            "<td style='text-align:center;font-weight:bold'>" + taxLabel + "</td>" +
-            "<td style='text-align:right'>" + item.total_price.toFixed(2) + "</td></tr>";
+        const taxRate = item.tax_rate || 0;
+        const taxLabel = taxRate > 0 ? "A" : "B";
+        const lineTotal = item.total_price;
+        const lineTax = item.tax_amount || (taxRate > 0 ? lineTotal - (lineTotal / (1 + taxRate/100)) : 0);
+
+        itemsHtml += "<tr>" +
+            "<td style='padding:2px 0'>" + item.name + (item.unit ? " (" + item.unit + ")" : "") + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + item.quantity + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + taxLabel + "</td>" +
+            "<td style='text-align:right;padding:2px 0'>" + lineTotal.toFixed(2) + "</td>" +
+            "</tr>";
+
+        if (taxRate > 0) {
+            totalA_qty += item.quantity;
+            totalA_amount += lineTotal;
+            totalA_tax += lineTax;
+        } else {
+            totalB_qty += item.quantity;
+            totalB_amount += lineTotal;
+        }
     });
 
+    // Compute A/B vatable amounts (net of VAT)
+    const aVatableNet = totalA_amount / 1.16;
+    const bVatableNet = totalB_amount;
+
     const bs = businessSettings || {};
+    const storeName = (bs.store_name || "").toString();
+    const regNo = (bs.reg_no || "").toString();
+    const cashier = sale.cashier || (authManager.getUser() ? authManager.getUser().name : "N/A");
+
     const banner = isReprint
-        ? "<div style='text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:8px;margin:10px 0'><strong style='color:#d32f2f;font-size:13px'>*** REPRINTED COPY ***</strong></div>"
+        ? "<div style='text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:6px;margin:8px 0'><strong style='color:#d32f2f;font-size:12px'>*** REPRINTED COPY ***</strong></div>"
         : "";
 
-    return "<!DOCTYPE html><html><head><title>Receipt</title><style>" +
-        "body{font-family:'Courier New',monospace;padding:20px;max-width:300px;margin:auto}" +
-        ".header{text-align:center;margin-bottom:15px}.header h2{margin:0;font-size:18px}.header p{margin:2px 0;font-size:10px}" +
-        "hr{border:none;border-top:1px dashed #000;margin:10px 0}" +
-        "table{width:100%;font-size:10px;border-collapse:collapse}td{padding:3px 0}" +
-        ".total-row{font-weight:bold;font-size:11px}" +
-        ".footer{text-align:center;margin-top:15px;font-size:9px}</style></head><body>" +
-        "<div class='header'>" +
+    return "<!DOCTYPE html><html><head><title>Receipt " + sale.receipt_no + "</title><style>" +
+        "body{font-family:'Courier New',monospace;padding:15px;max-width:320px;margin:auto;font-size:11px;color:#000;line-height:1.5}" +
+        ".h{text-align:center;margin-bottom:8px}" +
+        ".h h2{margin:0;font-size:15px;font-weight:bold}" +
+        ".h p{margin:2px 0;font-size:10px}" +
+        "hr{border:none;border-top:1px dashed #000;margin:8px 0}" +
+        "table{width:100%;border-collapse:collapse;font-size:10px}" +
+        "td,th{padding:2px 0}" +
+        ".kv{display:flex;justify-content:space-between;font-size:10px;padding:1px 0}" +
+        ".storeline{display:flex;justify-content:space-between;font-size:11px;margin:6px 0}" +
+        ".vat-table th{text-align:left;border-bottom:1px solid #000;padding:3px 0;font-size:10px}" +
+        ".vat-table td{padding:2px 0;font-size:10px}" +
+        ".total-row{font-weight:bold;font-size:12px}" +
+        ".left-note{text-align:left;font-size:9px;margin:8px 0}" +
+        ".qr-section{text-align:center;margin:10px 0}" +
+        ".qr-section img{width:140px;height:140px;image-rendering:pixelated}" +
+        ".small{font-size:9px;color:#555;text-align:center;margin-top:6px}" +
+        "</style></head><body>" +
+
+        // Header
+        "<div class='h'>" +
         "<h2>" + (bs.business_name || "Safari POS") + "</h2>" +
         "<p>" + [bs.business_po_box, bs.business_location].filter(Boolean).join(", ") + "</p>" +
-        "<table style='width:100%;font-size:10px;margin-top:4px;border-collapse:collapse'><tr>" +
-        "<td style='text-align:left;padding:0'>" + (bs.business_tax_pin ? "PIN: " + bs.business_tax_pin : "") + "</td>" +
-        "<td style='text-align:right;padding:0'>" + (bs.business_phone ? "Tel: " + bs.business_phone : "") + "</td>" +
-        "</tr></table>" +
-        "</div><hr>" + banner +
-        "<p style='font-size:10px'>Receipt: " + sale.receipt_no + "</p>" +
-        "<p style='font-size:10px'>Date: " + new Date(sale.created_at).toLocaleString() + "</p><hr>" +
-        "<table><thead><tr><th>Item</th><th style='text-align:center'>Qty</th><th style='text-align:center'>Tax</th><th style='text-align:right'>Amount</th></tr></thead><tbody>" +
-        itemsHtml + "</tbody></table><hr>" +
+        "<div style='display:flex;justify-content:space-between;font-size:10px;margin-top:2px'><span>PIN: " + (bs.business_tax_pin || "-") + "</span><span>Tel: " + (bs.business_phone || "-") + "</span></div>" +
+        "</div>" +
+
+        "<hr>" +
+
+        // Receipt number + date
+        "<div style='font-size:10px'>Receipt: " + sale.receipt_no + "</div>" +
+        "<div style='font-size:10px'>Date: " + new Date(sale.created_at).toLocaleString() + "</div>" +
+
+        // Store + Reg (same line, not bold)
+        "<div class='storeline'><span>STORE: " + (storeName || "-") + "</span><span>REG. NO.: " + (regNo || "-") + "</span></div>" +
+
+        banner +
+
+        "<hr>" +
+
+        // Barcode with receipt number
+        "<div style='text-align:center;margin:8px 0'><img src='http://localhost:8001/api/v1/sales/receipt-barcode/" + sale.receipt_no + "' alt='Barcode' style='height:40px;max-width:100%' /></div>" +
+
+        "<hr>" +
+
+        // Items table
         "<table>" +
-        "<tr><td>Subtotal:</td><td style='text-align:right'>" + sale.subtotal.toFixed(2) + "</td></tr>" +
-        "<tr><td>Tax (incl.):</td><td style='text-align:right'>" + sale.tax_amount.toFixed(2) + "</td></tr>" +
-        "<tr class='total-row'><td>TOTAL:</td><td style='text-align:right'>KSh " + sale.total_amount.toFixed(2) + "</td></tr>" +
-        "</table><hr>" +
-        "<p style='font-size:10px'>Payment: " + sale.payment_method.toUpperCase() + "</p>" +
-        "<p style='font-size:10px'>Served by: " + (authManager.getUser() ? authManager.getUser().name : "N/A") + "</p>" +
-        "<div class='footer'>" + "<p>" + (bs.receipt_footer || "") + "</p>" + "<hr><p style='font-size:9px'>A = Taxable | B = Non-Taxable</p>" + "<p style='font-size:8px;color:#888;margin-top:8px'>&copy; 2026 Safari Softwares &mdash; From Vision to Version</p>" + "</div>" +
+        "<thead><tr>" +
+        "<th style='text-align:left'>Item</th>" +
+        "<th style='text-align:center'>Qty</th>" +
+        "<th style='text-align:center'>Tax</th>" +
+        "<th style='text-align:right'>Amount</th>" +
+        "</tr></thead><tbody>" +
+        itemsHtml +
+        "</tbody></table>" +
+
+        "<hr>" +
+
+        // Totals
+        "<div class='kv'><span>Subtotal:</span><span>" + sale.subtotal.toFixed(2) + "</span></div>" +
+        "<div class='kv'><span>Tax (incl.):</span><span>" + sale.tax_amount.toFixed(2) + "</span></div>" +
+        "<div class='kv total-row'><span>TOTAL:</span><span>KSh " + sale.total_amount.toFixed(2) + "</span></div>" +
+
+        "<hr>" +
+
+        // VAT breakdown table
+        "<table class='vat-table'>" +
+        "<thead><tr><th>CODE</th><th>RATE</th><th style='text-align:right'>VATABLE AMT</th><th style='text-align:right'>VAT AMT</th></tr></thead>" +
+        "<tbody>" +
+        "<tr><td>A</td><td>16%</td><td style='text-align:right'>" + aVatableNet.toFixed(2) + "</td><td style='text-align:right'>" + totalA_tax.toFixed(2) + "</td></tr>" +
+        "<tr><td>B</td><td>0%</td><td style='text-align:right'>" + bVatableNet.toFixed(2) + "</td><td style='text-align:right'>0.00</td></tr>" +
+        "</tbody></table>" +
+
+        "<div class='left-note'>PRICES INCLUSIVE OF VAT WHERE APPLICABLE</div>" +
+
+        "<hr>" +
+
+        // Payment + cashier
+        "<div style='font-size:10px'>PAYMENT: " + sale.payment_method.toUpperCase() + "</div>" +
+        "<div style='font-size:10px;margin-top:4px'>YOU WERE SERVED BY: " + cashier.toUpperCase() + "</div>" +
+
+        "<hr>" +
+
+        // QR code
+        "<div class='qr-section'>" +
+        "<img src='http://localhost:8001/api/v1/sales/receipt-qr/" + sale.receipt_no + "' alt='QR' />" +
+        "<div style='font-size:8px;color:#555;margin-top:4px'>Scan to verify</div>" +
+        "</div>" +
+
+        // Footer with copyright
+        "<div class='small'>" +
+        (bs.receipt_footer || "") + "<br>" +
+        "&copy; 2026 Safari Softwares &mdash; From Vision to Version" +
+        "</div>" +
+
         "</body></html>";
 }
 
@@ -1050,52 +1144,136 @@ async function reprintReceipt(receiptNo) {
 
 function _printReceiptObject(receipt, settings, showReprintBanner) {
     let itemsHtml = "";
+    let totalA_qty = 0, totalA_amount = 0, totalA_tax = 0;
+    let totalB_qty = 0, totalB_amount = 0;
+
     receipt.items.forEach(item => {
-        const taxLabel = (item.tax_rate || 0) > 0 ? "A" : "B";
-        itemsHtml += "<tr><td>" + item.name + "</td><td style='text-align:center'>" + item.quantity +
-            "</td><td style='text-align:center;font-weight:bold'>" + taxLabel +
-            "</td><td style='text-align:right'>" + item.total_price.toFixed(2) + "</td></tr>";
+        const taxRate = item.tax_rate || 0;
+        const taxLabel = taxRate > 0 ? "A" : "B";
+        const lineTotal = item.total_price;
+        const lineTax = item.tax_amount || (taxRate > 0 ? lineTotal - (lineTotal / (1 + taxRate/100)) : 0);
+
+        itemsHtml += "<tr>" +
+            "<td style='padding:2px 0'>" + item.name + (item.unit ? " (" + item.unit + ")" : "") + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + item.quantity + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + taxLabel + "</td>" +
+            "<td style='text-align:right;padding:2px 0'>" + lineTotal.toFixed(2) + "</td>" +
+            "</tr>";
+
+        if (taxRate > 0) {
+            totalA_qty += item.quantity;
+            totalA_amount += lineTotal;
+            totalA_tax += lineTax;
+        } else {
+            totalB_qty += item.quantity;
+            totalB_amount += lineTotal;
+        }
     });
 
+    const aVatableNet = totalA_amount / 1.16;
+    const bVatableNet = totalB_amount;
+
+    const storeName = (settings.store_name || "").toString();
+    const regNo = (settings.reg_no || "").toString();
+    const cashier = receipt.cashier || "N/A";
+
     const banner = showReprintBanner
-        ? "<div style='text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:8px;margin:10px 0'><strong style='color:#d32f2f;font-size:13px'>*** REPRINTED COPY ***</strong></div>"
+        ? "<div style='text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:6px;margin:8px 0'><strong style='color:#d32f2f;font-size:12px'>*** REPRINTED COPY ***</strong></div>"
         : "";
 
-    const html = "<!DOCTYPE html><html><head><title>Reprint</title><style>" +
-        "body{font-family:'Courier New',monospace;padding:20px;max-width:300px;margin:auto}" +
-        ".h{text-align:center;margin-bottom:10px}.h h2{margin:0;font-size:16px}.h p{margin:2px 0;font-size:10px}" +
-        "hr{border:none;border-top:1px dashed #000;margin:10px 0}" +
-        "table{width:100%;font-size:11px;border-collapse:collapse}td{padding:3px 0}" +
-        ".tr{font-weight:bold;font-size:12px}" +
-        ".cb{display:block;margin:20px auto;padding:10px 20px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer}" +
-        "@media print{.cb{display:none}}</style></head><body>" +
-        "<div class='h'><h2>" + (settings.business_name || "Safari POS") + "</h2>" +
+    const html = "<!DOCTYPE html><html><head><title>Reprint " + receipt.receipt_no + "</title><style>" +
+        "body{font-family:'Courier New',monospace;padding:15px;max-width:320px;margin:auto;font-size:11px;color:#000;line-height:1.5}" +
+        ".h{text-align:center;margin-bottom:8px}" +
+        ".h h2{margin:0;font-size:15px;font-weight:bold}" +
+        ".h p{margin:2px 0;font-size:10px}" +
+        "hr{border:none;border-top:1px dashed #000;margin:8px 0}" +
+        "table{width:100%;border-collapse:collapse;font-size:10px}" +
+        "td,th{padding:2px 0}" +
+        ".kv{display:flex;justify-content:space-between;font-size:10px;padding:1px 0}" +
+        ".storeline{display:flex;justify-content:space-between;font-size:11px;margin:6px 0}" +
+        ".vat-table th{text-align:left;border-bottom:1px solid #000;padding:3px 0;font-size:10px}" +
+        ".vat-table td{padding:2px 0;font-size:10px}" +
+        ".total-row{font-weight:bold;font-size:12px}" +
+        ".left-note{text-align:left;font-size:9px;margin:8px 0}" +
+        ".qr-section{text-align:center;margin:10px 0}" +
+        ".qr-section img{width:140px;height:140px;image-rendering:pixelated}" +
+        ".small{font-size:9px;color:#555;text-align:center;margin-top:6px}" +
+        ".cb{display:block;margin:15px auto;padding:8px 16px;background:#8b4513;color:white;border:none;border-radius:5px;cursor:pointer}" +
+        "@media print{.cb{display:none}}" +
+        "</style></head><body>" +
+
+        "<div class='h'>" +
+        "<h2>" + (settings.business_name || "Safari POS") + "</h2>" +
         "<p>" + [settings.business_po_box, settings.business_location].filter(Boolean).join(", ") + "</p>" +
-        "<table style='width:100%;font-size:10px;margin-top:4px;border-collapse:collapse'><tr>" +
-        "<td style='text-align:left;padding:0'>" + (settings.business_tax_pin ? "PIN: " + settings.business_tax_pin : "") + "</td>" +
-        "<td style='text-align:right;padding:0'>" + (settings.business_phone ? "Tel: " + settings.business_phone : "") + "</td>" +
-        "</tr></table>" +
-        "</div><hr>" + banner + "<hr>" +
-        "<p style='font-size:11px'>Receipt: " + receipt.receipt_no + "</p>" +
-        "<p style='font-size:11px'>Date: " + receipt.created_at + "</p><hr>" +
-        "<table><thead><tr><th>Item</th><th style='text-align:center'>Qty</th><th style='text-align:center'>Tax</th><th style='text-align:right'>Amount</th></tr></thead><tbody>" +
-        itemsHtml + "</tbody></table><hr>" +
+        "<div style='display:flex;justify-content:space-between;font-size:10px;margin-top:2px'><span>PIN: " + (settings.business_tax_pin || "-") + "</span><span>Tel: " + (settings.business_phone || "-") + "</span></div>" +
+        "</div>" +
+
+        "<hr>" +
+
+        "<div style='font-size:10px'>Receipt: " + receipt.receipt_no + "</div>" +
+        "<div style='font-size:10px'>Date: " + receipt.created_at + "</div>" +
+
+        "<div class='storeline'><span>STORE: " + (storeName || "-") + "</span><span>REG. NO.: " + (regNo || "-") + "</span></div>" +
+
+        banner +
+
+        "<hr>" +
+
+
+        "<hr>" +
+
         "<table>" +
-        "<tr><td>Subtotal:</td><td style='text-align:right'>" + receipt.subtotal.toFixed(2) + "</td></tr>" +
-        "<tr><td>Tax (incl.):</td><td style='text-align:right'>" + receipt.tax_amount.toFixed(2) + "</td></tr>" +
-        "<tr class='tr'><td>TOTAL:</td><td style='text-align:right'>KSh " + receipt.total_amount.toFixed(2) + "</td></tr>" +
-        "</table><hr>" +
-        "<p style='font-size:11px'>Payment: " + receipt.payment_method.toUpperCase() + "</p>" +
-        "<p style='font-size:11px'>Served by: " + (receipt.cashier || "N/A") + "</p>" +
-        "<p style='font-size:9px'>A = Taxable | B = Non-Taxable</p>" + "<p style='font-size:8px;color:#888;margin-top:8px'>&copy; 2026 Safari Softwares &mdash; From Vision to Version</p>" +
-        "<button class='cb' onclick='window.close()'>Close</button></body></html>";
+        "<thead><tr>" +
+        "<th style='text-align:left'>Item</th>" +
+        "<th style='text-align:center'>Qty</th>" +
+        "<th style='text-align:center'>Tax</th>" +
+        "<th style='text-align:right'>Amount</th>" +
+        "</tr></thead><tbody>" +
+        itemsHtml +
+        "</tbody></table>" +
+
+        "<hr>" +
+
+        "<div class='kv'><span>Subtotal:</span><span>" + receipt.subtotal.toFixed(2) + "</span></div>" +
+        "<div class='kv'><span>Tax (incl.):</span><span>" + receipt.tax_amount.toFixed(2) + "</span></div>" +
+        "<div class='kv total-row'><span>TOTAL:</span><span>KSh " + receipt.total_amount.toFixed(2) + "</span></div>" +
+
+        "<hr>" +
+
+        "<table class='vat-table'>" +
+        "<thead><tr><th>CODE</th><th>RATE</th><th style='text-align:right'>VATABLE AMT</th><th style='text-align:right'>VAT AMT</th></tr></thead>" +
+        "<tbody>" +
+        "<tr><td>A</td><td>16%</td><td style='text-align:right'>" + aVatableNet.toFixed(2) + "</td><td style='text-align:right'>" + totalA_tax.toFixed(2) + "</td></tr>" +
+        "<tr><td>B</td><td>0%</td><td style='text-align:right'>" + bVatableNet.toFixed(2) + "</td><td style='text-align:right'>0.00</td></tr>" +
+        "</tbody></table>" +
+
+        "<div class='left-note'>PRICES INCLUSIVE OF VAT WHERE APPLICABLE</div>" +
+
+        "<hr>" +
+
+        "<div style='font-size:10px'>PAYMENT: " + receipt.payment_method.toUpperCase() + "</div>" +
+        "<div style='font-size:10px;margin-top:4px'>YOU WERE SERVED BY: " + cashier.toUpperCase() + "</div>" +
+
+        "<hr>" +
+
+        "<div class='qr-section'>" +
+        "<img src='http://localhost:8001/api/v1/sales/receipt-qr/" + receipt.receipt_no + "' alt='QR' />" +
+        "<div style='font-size:8px;color:#555;margin-top:4px'>Scan to verify</div>" +
+        "</div>" +
+
+        "<div class='small'>" +
+        (settings.receipt_footer || "") + "<br>" +
+        "&copy; 2026 Safari Softwares &mdash; From Vision to Version" +
+        "</div>" +
+
+        "<button class='cb' onclick='window.close()'>Close</button>" +
+        "</body></html>";
 
     const pw = window.open("", "Reprint", "width=400,height=600");
-    if (!pw) { alert("Please allow popups to print receipts."); return; }
     pw.document.write(html);
     pw.document.close();
     setTimeout(() => { try { pw.print(); } catch (e) {} }, 1000);
-    setTimeout(() => { try { pw.close(); } catch (e) {} }, 15000);
+    setTimeout(() => { try { pw.close(); } catch (e) {} }, 20000);
 }
 
 async function deleteReceipt(receiptNo) {
@@ -1554,6 +1732,8 @@ async function loadSettings() {
         set("businessPhone", settings.business_phone);
         set("businessTaxPin", settings.business_tax_pin);
         set("receiptFooter", settings.receipt_footer);
+        set("storeName", settings.store_name || "");
+        set("regNo", settings.reg_no || "");
     } catch (err) {
         console.error("[loadSettings]", err);
     }
@@ -1567,6 +1747,8 @@ async function updateBusinessInfo() {
         business_phone: document.getElementById("businessPhone").value,
         business_tax_pin: document.getElementById("businessTaxPin").value,
         receipt_footer: document.getElementById("receiptFooter").value,
+            store_name: document.getElementById("storeName") ? document.getElementById("storeName").value : "",
+            reg_no: document.getElementById("regNo") ? document.getElementById("regNo").value : "",
     };
     try {
         await apiCall("/settings/business", "PUT", payload);

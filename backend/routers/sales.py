@@ -357,3 +357,99 @@ async def delete_sales_before(
 
     db.commit()
     return {"message": f"Deleted {count} receipts before {date}. Tax records preserved."}
+
+
+
+# ============================================================
+#  QR Code for receipt
+# ============================================================
+
+@router.get("/receipt-qr/{receipt_no}")
+async def receipt_qr(receipt_no: str, db: Session = Depends(get_db)):
+    # Public endpoint — no auth required (browsers can't send auth on <img src>)
+    """Return a QR code PNG containing the receipt summary."""
+    import io
+    import qrcode
+    from fastapi.responses import Response
+
+    # Get the sale
+    sale = db.query(Sale).filter(Sale.receipt_no == receipt_no).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    # Get business info
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT key, value FROM settings WHERE key IN ('store_name','reg_no','business_tax_pin')")
+        settings = dict(cur.fetchall())
+
+    store_name = settings.get("store_name", "") or "MAIN"
+    reg_no = settings.get("reg_no", "") or ""
+    tax_pin = settings.get("business_tax_pin", "") or ""
+
+    # Build QR text
+    qr_text = (
+        f"SAFARI POS RECEIPT\n"
+        f"Receipt: {sale.receipt_no}\n"
+        f"Date: {sale.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Store: {store_name} | Reg: {reg_no}\n"
+        f"Cashier: {sale.cashier_name or 'Unknown'}\n"
+        f"PIN: {tax_pin}\n"
+        f"Total: KSh {sale.total_amount:.2f}\n"
+        f"Tax: KSh {sale.tax_amount:.2f}\n"
+        f"Payment: {sale.payment_method.upper()}"
+    )
+
+    # Generate QR
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=20,
+        border=3,
+    )
+    qr.add_data(qr_text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # Return as PNG
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
+
+# ============================================================
+#  Barcode for receipt serial
+# ============================================================
+
+@router.get("/receipt-barcode/{receipt_no}")
+async def receipt_barcode(receipt_no: str, db: Session = Depends(get_db)):
+    """Public endpoint — returns a barcode PNG with the receipt number."""
+    import io
+    try:
+        import barcode
+        from barcode.writer import ImageWriter
+    except ImportError:
+        raise HTTPException(status_code=500, detail="python-barcode not installed")
+
+    # Generate Code128 barcode
+    try:
+        CODE128 = barcode.get_barcode_class("code128")
+        code = CODE128(receipt_no, writer=ImageWriter())
+
+        buf = io.BytesIO()
+        # write() writes a PNG by default; options control size
+        code.write(buf, options={
+            "module_width": 0.3,
+            "module_height": 8.0,
+            "font_size": 0,
+            "text_distance": 0,
+            "quiet_zone": 1.0,
+            "dpi": 300,
+        })
+        buf.seek(0)
+        from fastapi.responses import Response
+        return Response(content=buf.getvalue(), media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Barcode generation failed: {e}")
