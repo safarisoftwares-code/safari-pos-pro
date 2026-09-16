@@ -241,6 +241,33 @@ async def startup_event():
     except Exception as e:
         print(f"[mpesa-poller] WARNING: Failed to start worker: {e}")
 
+    # ------------------------------------------------------------------
+    #  Auto-migrate: ensure all new columns exist in sales table
+    # ------------------------------------------------------------------
+    try:
+        import sqlite3 as _sql
+        with _sql.connect(DB_PATH) as _conn:
+            _cur = _conn.cursor()
+            _cur.execute("PRAGMA table_info(sales)")
+            _existing = [c[1] for c in _cur.fetchall()]
+
+            _new_cols = [
+                ("payment_status", "TEXT DEFAULT 'paid'"),
+                ("mpesa_checkout_id", "TEXT"),
+                ("mpesa_receipt", "TEXT"),
+                ("paid_at", "TEXT"),
+            ]
+            _added = 0
+            for _name, _defn in _new_cols:
+                if _name not in _existing:
+                    _cur.execute("ALTER TABLE sales ADD COLUMN " + _name + " " + _defn)
+                    _added += 1
+            if _added:
+                _conn.commit()
+                print("[migrate] Added " + str(_added) + " new columns to sales table")
+    except Exception as _e:
+        print("[migrate] Auto-migration warning: " + str(_e))
+
     # Ensure admin exists
     db = SessionLocal()
     try:
