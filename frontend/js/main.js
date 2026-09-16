@@ -1037,7 +1037,7 @@ function buildReceiptHtml(sale, isReprint) {
 
         // Header
         "<div class='h'>" +
-        "<h2>" + (bs.business_name || "Safari POS") + "</h2>" +
+        "<div style='font-size:15px;font-weight:bold;margin:0;line-height:1.2'>" + (bs.business_name || "Safari POS") + "</div>" +
         "<p>" + [bs.business_po_box, bs.business_location].filter(Boolean).join(", ") + "</p>" +
         "<div style='display:flex;justify-content:space-between;font-size:10px;margin-top:2px'><span>PIN: " + (bs.business_tax_pin || "-") + "</span><span>Tel: " + (bs.business_phone || "-") + "</span></div>" +
         "</div>" +
@@ -1340,7 +1340,7 @@ function _printReceiptObject(receipt, settings, showReprintBanner) {
         "</style></head><body>" +
 
         "<div class='h'>" +
-        "<h2>" + (settings.business_name || "Safari POS") + "</h2>" +
+        "<div style='font-size:15px;font-weight:bold;margin:0;line-height:1.2'>" + (settings.business_name || "Safari POS") + "</div>" +
         "<p>" + [settings.business_po_box, settings.business_location].filter(Boolean).join(", ") + "</p>" +
         "<div style='display:flex;justify-content:space-between;font-size:10px;margin-top:2px'><span>PIN: " + (settings.business_tax_pin || "-") + "</span><span>Tel: " + (settings.business_phone || "-") + "</span></div>" +
         "</div>" +
