@@ -31,9 +31,6 @@ if exist "%PIDFILE%" (
 REM Always do a scoped sweep: kill any pythonw whose path is under our venv
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe'\" | Where-Object { $_.ExecutablePath -like '*\safari-pos-pro\venv\*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
-REM Kill the packaged EXE too (SafariPOSPro.exe)
-powershell -NoProfile -Command "Get-Process SafariPOSPro -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
-
 REM Also kill the real backend (system pythonw running our main.py)
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe'\" | Where-Object { $_.CommandLine -like '*safari-pos-pro\backend\main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
