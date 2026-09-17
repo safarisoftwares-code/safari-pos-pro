@@ -136,21 +136,3 @@ class Supplier(Base):
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.now)
-
-
-# ====================================================================
-#  Purchase Order Items — multi-item PO line entries
-# ====================================================================
-class PurchaseOrderItem(Base):
-    __tablename__ = "purchase_order_items"
-    id = Column(Integer, primary_key=True, index=True)
-    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
-    product_name = Column(String, nullable=False)
-    unit = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    unit_cost = Column(Float, nullable=False)
-    line_total = Column(Float, nullable=False)
-    received = Column(Boolean, default=False)
-    received_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)

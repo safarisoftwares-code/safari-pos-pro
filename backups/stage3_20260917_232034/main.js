@@ -1859,214 +1859,65 @@ function printSection(sectionId) {
 
 
 // ============================================================
-//  Purchase Orders (multi-item)
+//  Purchase Orders
 // ============================================================
 
-let _poProductCache = [];
-let _poSupplierCache = [];
-let _poItemRowCounter = 0;
-
 async function openPOModal() {
-    try {
-        // Load suppliers
-        _poSupplierCache = await apiCall("/suppliers/");
-        // Load products
-        _poProductCache = await apiCall("/products");
+    await loadProductsForPO();
+    const f = document.getElementById("poForm");
+    if (f) f.reset();
+    openModal("poModal");
+}
 
-        const supplierSel = document.getElementById("poSupplier");
-        if (supplierSel) {
-            if (!_poSupplierCache || _poSupplierCache.length === 0) {
-                supplierSel.innerHTML = "<option value=\"\">No suppliers — add one first</option>";
+async function loadProductsForPO() {
+    try {
+        const list = await apiCall("/products");
+        const select = document.getElementById("poProductId");
+        if (select) {
+            if (!list || list.length === 0) {
+                select.innerHTML = "<option value=\"\">No products available</option>";
             } else {
-                supplierSel.innerHTML = "<option value=\"\">-- Select Supplier --</option>" +
-                    _poSupplierCache.map(s => "<option value=\"" + s.name + "\">" + s.name + "</option>").join("");
+                select.innerHTML = "<option value=\"\">Select Product...</option>" +
+                    list.map(p => "<option value=\"" + p.id + "\">" + p.name + " (" + (p.unit || "N/A") + ")</option>").join("");
             }
         }
-
-        const notesEl = document.getElementById("poNotes");
-        if (notesEl) notesEl.value = "";
-
-        const itemsContainer = document.getElementById("poItemsContainer");
-        if (itemsContainer) itemsContainer.innerHTML = "";
-        _poItemRowCounter = 0;
-
-        // Add one empty row by default
-        addPOItemRow();
-
-        updatePOTotal();
-        openModal("poModal");
     } catch (err) {
-        showError(err);
-    }
-}
-
-function addPOItemRow() {
-    const container = document.getElementById("poItemsContainer");
-    if (!container) return;
-
-    const rowId = "poRow_" + (++_poItemRowCounter);
-    const productOpts = _poProductCache.map(p =>
-        "<option value=\"" + p.id + "\" data-cost=\"" + (p.cost || 0) + "\">" + p.name + (p.unit ? " (" + p.unit + ")" : "") + "</option>"
-    ).join("");
-
-    const row = document.createElement("div");
-    row.id = rowId;
-    row.className = "po-item-row";
-    row.style.cssText = "display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center";
-    row.innerHTML =
-        "<select class=\"po-item-product\" style=\"padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px\">" +
-            "<option value=\"\">-- Product --</option>" + productOpts +
-        "</select>" +
-        "<input type=\"number\" class=\"po-item-qty\" placeholder=\"Qty\" min=\"1\" value=\"1\" style=\"padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px\">" +
-        "<input type=\"number\" class=\"po-item-cost\" placeholder=\"Unit Cost\" step=\"0.01\" min=\"0\" value=\"0\" style=\"padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px\">" +
-        "<button type=\"button\" onclick=\"removePOItemRow('" + rowId + "')\" style=\"background:#d32f2f;color:white;border:none;border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:14px\">×</button>";
-
-    container.appendChild(row);
-
-    // Wire listeners for live total
-    const qtyInput = row.querySelector(".po-item-qty");
-    const costInput = row.querySelector(".po-item-cost");
-    const productSel = row.querySelector(".po-item-product");
-    if (qtyInput) qtyInput.addEventListener("input", updatePOTotal);
-    if (costInput) costInput.addEventListener("input", updatePOTotal);
-    if (productSel) productSel.addEventListener("change", function () {
-        // Auto-fill cost from product.cost if available
-        const opt = productSel.options[productSel.selectedIndex];
-        const cost = opt ? parseFloat(opt.getAttribute("data-cost") || "0") : 0;
-        if (cost > 0 && (!costInput.value || parseFloat(costInput.value) === 0)) {
-            costInput.value = cost.toFixed(2);
-            updatePOTotal();
-        }
-    });
-}
-
-function removePOItemRow(rowId) {
-    const row = document.getElementById(rowId);
-    if (row) row.remove();
-    updatePOTotal();
-}
-
-function updatePOTotal() {
-    const container = document.getElementById("poItemsContainer");
-    if (!container) return;
-    let total = 0;
-    container.querySelectorAll(".po-item-row").forEach(row => {
-        const q = parseFloat(row.querySelector(".po-item-qty").value) || 0;
-        const c = parseFloat(row.querySelector(".po-item-cost").value) || 0;
-        total += q * c;
-    });
-    const el = document.getElementById("poGrandTotal");
-    if (el) el.textContent = "KSh " + total.toFixed(2);
-}
-
-async function savePO(event) {
-    if (event) event.preventDefault();
-
-    const supplier = document.getElementById("poSupplier").value;
-    if (!supplier) { alert("Please select a supplier."); return; }
-
-    const notes = (document.getElementById("poNotes").value || "").trim();
-
-    const container = document.getElementById("poItemsContainer");
-    const rows = container.querySelectorAll(".po-item-row");
-    const items = [];
-
-    for (const row of rows) {
-        const pid = row.querySelector(".po-item-product").value;
-        const qty = parseInt(row.querySelector(".po-item-qty").value);
-        const cost = parseFloat(row.querySelector(".po-item-cost").value);
-
-        if (!pid) { alert("Every row must have a product selected."); return; }
-        if (!qty || qty < 1) { alert("Quantity must be at least 1 on every row."); return; }
-        if (isNaN(cost) || cost < 0) { alert("Unit cost must be a number ≥ 0."); return; }
-
-        items.push({ product_id: parseInt(pid), quantity: qty, unit_cost: cost });
-    }
-
-    if (items.length === 0) { alert("Add at least one item."); return; }
-
-    try {
-        await apiCall("/purchase-orders/", "POST", {
-            supplier: supplier,
-            notes: notes || null,
-            items: items,
-        });
-        closeModal("poModal");
-        showSuccess("Purchase Order created.");
-        await loadPurchaseOrders();
-    } catch (err) {
-        showError(err);
+        console.error("[loadProductsForPO]", err);
     }
 }
 
 async function loadPurchaseOrders() {
     try {
-        const pos = await apiCall("/purchase-orders/");
+        const grouped = await apiCall("/purchase-orders/by-date");
         const tbody = document.getElementById("poTableBody");
         if (!tbody) return;
 
-        if (!pos || pos.length === 0) {
-            tbody.innerHTML = "<tr><td colspan=\"7\" style=\"text-align:center;color:#999;padding:20px\">No purchase orders yet.</td></tr>";
+        const dates = Object.keys(grouped || {}).sort().reverse();
+        if (dates.length === 0) {
+            tbody.innerHTML = "<tr><td colspan=\"10\">No purchase orders yet</td></tr>";
             return;
         }
 
-        const statusColor = {
-            pending:   "#ff9800",
-            partial:   "#0088cc",
-            received:  "#2e7d32",
-            cancelled: "#999"
-        };
-
         let html = "";
-        pos.forEach(po => {
-            const badge = statusColor[po.status] || "#666";
-            const dateStr = new Date(po.created_at).toLocaleDateString();
-            const itemCount = po.items ? po.items.length : 0;
-
-            html +=
-                "<tr style=\"cursor:pointer\" onclick=\"togglePORow(" + po.id + ")\">" +
-                "<td><strong>" + (po.po_number || ("PO#" + po.id)) + "</strong></td>" +
-                "<td>" + po.supplier + "</td>" +
-                "<td>" + dateStr + "</td>" +
-                "<td>" + itemCount + " item" + (itemCount === 1 ? "" : "s") + "</td>" +
-                "<td>KSh " + po.total_cost.toFixed(2) + "</td>" +
-                "<td><span style=\"background:" + badge + ";color:white;padding:3px 8px;border-radius:3px;font-size:11px;text-transform:uppercase\">" + po.status + "</span></td>" +
-                "<td style=\"white-space:nowrap\" onclick=\"event.stopPropagation()\">" +
-                    "<button onclick=\"printPORow(" + po.id + ")\" style=\"padding:4px 8px;font-size:11px;background:#0088cc;color:white;border:none;border-radius:3px;cursor:pointer;margin-right:3px\">Print</button>" +
-                    (po.status === "pending" || po.status === "partial"
-                        ? "<button onclick=\"receiveAllItems(" + po.id + ")\" style=\"padding:4px 8px;font-size:11px;background:#2e7d32;color:white;border:none;border-radius:3px;cursor:pointer;margin-right:3px\">Receive All</button>"
-                        : "") +
-                    (po.status === "pending" || po.status === "partial"
-                        ? "<button onclick=\"cancelPO(" + po.id + ")\" style=\"padding:4px 8px;font-size:11px;background:#ff9800;color:white;border:none;border-radius:3px;cursor:pointer;margin-right:3px\">Cancel</button>"
-                        : "") +
-                    "<button onclick=\"deletePO(" + po.id + ")\" style=\"padding:4px 8px;font-size:11px;background:#d32f2f;color:white;border:none;border-radius:3px;cursor:pointer\">Delete</button>" +
-                "</td>" +
-                "</tr>";
-
-            // Hidden expansion row
-            html += "<tr id=\"poExpand_" + po.id + "\" style=\"display:none\"><td colspan=\"7\" style=\"background:#fdfbf7;padding:12px\">";
-            if (po.notes) {
-                html += "<div style=\"font-size:12px;color:#666;margin-bottom:8px\"><strong>Notes:</strong> " + po.notes + "</div>";
-            }
-            html += "<table style=\"width:100%;font-size:12px\"><thead><tr><th>Product</th><th>Unit</th><th>Qty</th><th>Unit Cost</th><th>Line Total</th><th>Received</th><th>Action</th></tr></thead><tbody>";
-            (po.items || []).forEach(it => {
-                const receivedMark = it.received
-                    ? "<span style=\"color:#2e7d32;font-weight:bold\">✓ " + (it.received_at ? new Date(it.received_at).toLocaleDateString() : "Yes") + "</span>"
-                    : "<span style=\"color:#999\">—</span>";
-                const actionBtn = (!it.received && (po.status === "pending" || po.status === "partial"))
-                    ? "<button onclick=\"receiveOneItem(" + po.id + "," + it.id + ")\" style=\"padding:3px 8px;font-size:11px;background:#2e7d32;color:white;border:none;border-radius:3px;cursor:pointer\">Receive</button>"
-                    : "";
-                html += "<tr>" +
-                    "<td>" + it.product_name + "</td>" +
-                    "<td>" + (it.unit || "-") + "</td>" +
-                    "<td>" + it.quantity + "</td>" +
-                    "<td>KSh " + it.unit_cost.toFixed(2) + "</td>" +
-                    "<td>KSh " + it.line_total.toFixed(2) + "</td>" +
-                    "<td>" + receivedMark + "</td>" +
-                    "<td>" + actionBtn + "</td>" +
-                    "</tr>";
+        dates.forEach(date => {
+            const pos = grouped[date];
+            const dayTotal = pos.reduce((sum, p) => sum + p.total_cost, 0);
+            html += "<tr style=\"background:#f5e6d3;font-weight:bold\"><td colspan=\"7\">" +
+                date + " — " + pos.length + " POs — Total: KSh " + dayTotal.toFixed(2) +
+                "</td><td colspan=\"3\" style=\"text-align:right\">" +
+                "<button onclick=\"printPODay('" + date + "')\" style=\"background:#0088cc;color:white;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11px;margin-right:5px\">Print Day</button>" +
+                "<button onclick=\"deletePODay('" + date + "')\" style=\"background:#d32f2f;color:white;padding:4px 10px;border:none;border-radius:3px;cursor:pointer;font-size:11px\">Delete Day</button>" +
+                "</td></tr>";
+            pos.forEach(po => {
+                html += "<tr><td>" + po.id + "</td><td>" + po.supplier + "</td><td>" +
+                    po.product_name + "</td><td>" + (po.unit || "-") + "</td><td>" +
+                    po.quantity + "</td><td>KSh " + po.unit_cost + "</td><td>KSh " +
+                    po.total_cost + "</td><td>" + po.status.toUpperCase() + "</td><td>" +
+                    (po.status === "pending"
+                        ? "<button onclick=\"updatePOStatus(" + po.id + ",'received')\" style=\"padding:3px 8px;font-size:11px;cursor:pointer\">Receive</button>"
+                        : "-") +
+                    "</td><td><button onclick=\"deletePO(" + po.id + ")\" style=\"color:red;padding:3px 8px;font-size:11px;cursor:pointer\">Delete</button></td></tr>";
             });
-            html += "</tbody></table></td></tr>";
         });
         tbody.innerHTML = html;
     } catch (err) {
@@ -2074,49 +1925,47 @@ async function loadPurchaseOrders() {
     }
 }
 
-function togglePORow(poId) {
-    const row = document.getElementById("poExpand_" + poId);
-    if (!row) return;
-    row.style.display = (row.style.display === "none" || row.style.display === "") ? "table-row" : "none";
-}
+async function savePO() {
+    const supplier = document.getElementById("poSupplier").value.trim();
+    const productId = document.getElementById("poProductId").value;
+    const qty = document.getElementById("poQuantity").value;
+    const cost = document.getElementById("poUnitCost").value;
 
-async function receiveAllItems(poId) {
-    if (!confirm("Receive all pending items on this PO? Each item's stock will be updated.")) return;
+    if (!supplier) { alert("Supplier is required."); return; }
+    if (!productId) { alert("Please select a product."); return; }
+    if (!qty || parseInt(qty) < 1) { alert("Quantity must be at least 1."); return; }
+    if (!cost) { alert("Unit cost is required."); return; }
+
     try {
-        const r = await apiCall("/purchase-orders/" + poId + "/receive", "POST");
-        showSuccess("Received " + r.items_received + " item(s).");
+        await apiCall("/purchase-orders/", "POST", {
+            supplier: supplier,
+            product_id: parseInt(productId),
+            quantity: parseInt(qty),
+            unit_cost: parseFloat(cost),
+        });
+        closeModal("poModal");
+        showSuccess("PO created!");
         await loadPurchaseOrders();
     } catch (err) {
         showError(err);
     }
 }
 
-async function receiveOneItem(poId, itemId) {
-    if (!confirm("Mark this item as received?")) return;
+async function updatePOStatus(poId, status) {
     try {
-        const r = await apiCall("/purchase-orders/" + poId + "/receive-item/" + itemId, "POST");
-        showSuccess("Item received.");
+        await apiCall("/purchase-orders/" + poId + "/status?status=" + status, "PUT");
+        showSuccess("PO marked as received. Stock updated.");
         await loadPurchaseOrders();
+        await loadProducts();
     } catch (err) {
         showError(err);
     }
 }
 
-async function cancelPO(poId) {
-    if (!confirm("Cancel this PO? It will not be deletable if items are already received.")) return;
+async function deletePO(id) {
+    if (prompt("Type DELETE to confirm:") !== "DELETE") return;
     try {
-        await apiCall("/purchase-orders/" + poId + "/cancel", "POST");
-        showSuccess("PO cancelled.");
-        await loadPurchaseOrders();
-    } catch (err) {
-        showError(err);
-    }
-}
-
-async function deletePO(poId) {
-    if (!confirm("Permanently delete this PO? Only possible if no items were received.")) return;
-    try {
-        await apiCall("/purchase-orders/" + poId, "DELETE");
+        await apiCall("/purchase-orders/" + id, "DELETE");
         showSuccess("PO deleted.");
         await loadPurchaseOrders();
     } catch (err) {
@@ -2124,9 +1973,41 @@ async function deletePO(poId) {
     }
 }
 
-async function printPORow(poId) {
-    showSuccess("Print will be wired in Stage 4 (Print PO document). For now, PO #" + poId + " is ready.");
+async function deletePODay(date) {
+    if (prompt("Type DELETE to remove ALL POs for " + date + ":") !== "DELETE") return;
+    if (!confirm("Delete all POs for " + date + "?")) return;
+    try {
+        const result = await apiCall("/purchase-orders/delete-day/" + date, "DELETE");
+        showSuccess(result.message);
+        await loadPurchaseOrders();
+    } catch (err) {
+        showError(err);
+    }
 }
+
+async function printPODay(date) {
+    try {
+        const pos = await apiCall("/purchase-orders/by-date/" + date);
+        if (!pos || pos.length === 0) { alert("No POs for this date"); return; }
+        let itemsHtml = "";
+        let total = 0;
+        pos.forEach(p => {
+            itemsHtml += "<tr><td>" + p.id + "</td><td>" + p.supplier + "</td><td>" +
+                p.product_name + " " + (p.unit || "") + "</td><td>" + p.quantity +
+                "</td><td>KSh " + p.unit_cost + "</td><td>KSh " + p.total_cost + "</td></tr>";
+            total += p.total_cost;
+        });
+        const html = "<!DOCTYPE html><html><head><title>PO Report " + date + "</title><style>body{font-family:Arial;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#8b4513;color:white}.total{font-weight:bold;background:#f5e6d3}</style></head><body><h2>Purchase Orders Report</h2><p style='text-align:center'>Date: " + date + "</p><table><thead><tr><th>ID</th><th>Supplier</th><th>Product</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>" + itemsHtml + "<tr class='total'><td colspan='5'>TOTAL</td><td>KSh " + total.toFixed(2) + "</td></tr></tbody></table></body></html>";
+        const pw = window.open("", "POReport", "width=800,height=600");
+        if (!pw) { alert("Please allow popups."); return; }
+        pw.document.write(html);
+        pw.document.close();
+        setTimeout(() => { try { pw.print(); } catch (e) {} }, 500);
+    } catch (err) {
+        showError(err);
+    }
+}
+
 
 // ============================================================
 //  Settings

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4.5">
+    <link rel="stylesheet" href="/static/css/style.css?v=4.4">
 </head>
 <body>
     <div class="dashboard-container">
@@ -204,24 +204,31 @@
 
             <!-- ============================== PURCHASE ORDERS ============================== -->
             <div id="purchaseOrders" class="view" style="display:none;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:20px"><h2>Purchase Orders</h2><button class="btn btn-primary" onclick="openPOModal()" style="width:auto;padding:10px 20px">New PO</button></div>
+                <div class="data-table"><table style="width:100%"><thead><tr><th>ID</th><th>Supplier</th><th>Product</th><th>Unit</th><th>Qty</th><th>Cost</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="poTableBody"></tbody></table></div>
+            </div>
+
+            <!-- ============================== BACKUP ============================== -->
+            <div id="suppliers" class="view" style="display:none;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:20px">
-                    <h2>Purchase Orders</h2>
-                    <button class="btn btn-primary" onclick="openPOModal()" style="width:auto;padding:10px 20px">New PO</button>
+                    <h2>Suppliers</h2>
+                    <button class="btn btn-primary" onclick="openSupplierModal()" style="width:auto;padding:10px 20px">Add Supplier</button>
                 </div>
                 <div class="data-table">
                     <table style="width:100%">
                         <thead>
                             <tr>
-                                <th>PO #</th>
-                                <th>Supplier</th>
-                                <th>Date</th>
-                                <th>Items</th>
-                                <th>Total</th>
-                                <th>Status</th>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Address</th>
+                                <th>KRA PIN</th>
+                                <th>Notes</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="poTableBody"></tbody>
+                        <tbody id="suppliersTableBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -329,11 +336,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=4.5"></script>
-    <script src="/static/js/app.js?v=4.5"></script>
-    <script src="/static/js/main.js?v=4.5"></script>
-    <script src="/static/js/analytics.js?v=4.5"></script>
-    <script src="/static/js/tax.js?v=4.5"></script>
+    <script src="/static/js/auth.js?v=4.4"></script>
+    <script src="/static/js/app.js?v=4.4"></script>
+    <script src="/static/js/main.js?v=4.4"></script>
+    <script src="/static/js/analytics.js?v=4.4"></script>
+    <script src="/static/js/tax.js?v=4.4"></script>
 
     <!-- ============================== MODALS ============================== -->
 
@@ -438,49 +445,13 @@
     </form></div></div>
 
     <!-- PO Modal -->
-    <!-- PO Modal (multi-item) -->
-    <div id="poModal" class="modal">
-        <div class="modal-content" style="max-width:720px">
-            <h3>New Purchase Order</h3>
-            <form id="poForm" autocomplete="off">
-                <div class="form-group">
-                    <label>Supplier *</label>
-                    <select id="poSupplier" required style="width:100%;padding:10px;border:2px solid #ecf0f1;border-radius:8px">
-                        <option value="">-- Select Supplier --</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Notes (optional)</label>
-                    <textarea id="poNotes" rows="2" placeholder="Delivery instructions, payment terms, special requests..." style="width:100%;padding:8px;border:2px solid #ecf0f1;border-radius:8px;font-family:inherit;font-size:13px;resize:vertical"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                        <label style="margin:0">Items *</label>
-                        <button type="button" onclick="addPOItemRow()" style="background:#2e7d32;color:white;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px">+ Add Item</button>
-                    </div>
-                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;font-size:11px;color:#666;font-weight:bold;padding:0 2px 4px 2px">
-                        <div>Product</div>
-                        <div>Quantity</div>
-                        <div>Unit Cost (KSh)</div>
-                        <div></div>
-                    </div>
-                    <div id="poItemsContainer" style="max-height:240px;overflow-y:auto;padding-right:4px"></div>
-                </div>
-
-                <div style="background:#fdfbf7;border:2px solid #8b4513;border-radius:8px;padding:12px;text-align:right;margin-bottom:15px">
-                    <span style="color:#8b4513;font-weight:bold;font-size:14px">GRAND TOTAL: </span>
-                    <span id="poGrandTotal" style="font-size:18px;font-weight:bold;color:#2e7d32">KSh 0.00</span>
-                </div>
-
-                <div style="display:flex;gap:10px">
-                    <button type="submit" class="btn btn-primary" style="flex:1">Create PO</button>
-                    <button type="button" class="btn btn-danger" onclick="closeModal(&#39;poModal&#39;)" style="flex:1">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <div id="poModal" class="modal"><div class="modal-content"><h3>New Purchase Order</h3><form id="poForm">
+        <div class="form-group"><label>Supplier</label><input type="text" id="poSupplier" required></div>
+        <div class="form-group"><label>Product</label><select id="poProductId"></select></div>
+        <div class="form-group"><label>Quantity</label><input type="number" id="poQuantity" required min="1"></div>
+        <div class="form-group"><label>Unit Cost</label><input type="number" id="poUnitCost" step="0.01" required></div>
+        <div style="display:flex;gap:10px"><button type="submit" class="btn btn-primary" style="flex:1">Create PO</button><button type="button" class="btn btn-danger" onclick="closeModal(&#39;poModal&#39;)" style="flex:1">Cancel</button></div>
+    </form></div></div>
 
     <!-- Selective Restore Modal -->
     <div id="selectiveRestoreModal" class="modal">

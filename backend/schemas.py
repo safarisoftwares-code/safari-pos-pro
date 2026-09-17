@@ -108,3 +108,80 @@ class SaleCreate(BaseModel):
     items: List[SaleItemCreate]
     payment_method: str
     discount: float = 0
+
+
+# ============================================================
+#  Suppliers
+# ============================================================
+
+class SupplierCreate(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    kra_pin: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    kra_pin: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplierResponse(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    kra_pin: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: bool
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+#  Purchase Orders (multi-item)
+# ============================================================
+
+class PurchaseOrderItemCreate(BaseModel):
+    product_id: Optional[int] = None
+    quantity: int
+    unit_cost: float
+
+
+class PurchaseOrderItemResponse(BaseModel):
+    id: int
+    product_id: Optional[int] = None
+    product_name: str
+    unit: Optional[str] = None
+    quantity: int
+    unit_cost: float
+    line_total: float
+    received: bool
+    received_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class PurchaseOrderCreate(BaseModel):
+    supplier: str
+    notes: Optional[str] = None
+    items: List[PurchaseOrderItemCreate]
+
+
+class PurchaseOrderResponse(BaseModel):
+    id: int
+    supplier: str
+    notes: Optional[str] = None
+    status: str
+    total_cost: float
+    items: List[PurchaseOrderItemResponse] = []
+    created_at: datetime
+    class Config:
+        from_attributes = True
