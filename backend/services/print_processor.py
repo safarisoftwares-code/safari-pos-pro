@@ -54,6 +54,11 @@ def _extract_ref_from_html(html_payload, job_type="unknown"):
     if m:
         return m.group(1)
 
+    # PO number - look for PO#<number>
+    m = re.search(r"PO#(\d+)", html_payload)
+    if m:
+        return f"PO-{m.group(1)}"
+
     # Report title - look for <h2>...</h2> in the header
     if job_type == "report":
         m = re.search(r"<h2[^>]*>([^<]+)</h2>", html_payload)
@@ -99,7 +104,11 @@ def save_pdf_archive(job_type, html_payload, timestamp=None):
         os.makedirs(target_dir, exist_ok=True)
 
         ref = _extract_ref_from_html(html_payload, job_type)
-        filename = f"{now.strftime('%H-%M-%S')}_{job_type}_{ref}.pdf"
+        # POs get a clean "time_ref" name (e.g. 00-24-32_PO-9.pdf)
+        if ref.startswith("PO-"):
+            filename = f"{now.strftime('%H-%M-%S')}_{ref}.pdf"
+        else:
+            filename = f"{now.strftime('%H-%M-%S')}_{job_type}_{ref}.pdf"
         target_path = os.path.join(target_dir, filename)
 
         # Render via headless Chromium

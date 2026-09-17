@@ -2125,46 +2125,7 @@ async function deletePO(poId) {
 }
 
 async function printPORow(poId) {
-    // (C): offer Preview or Push to Print
-    const choice = confirm(
-        "Print Purchase Order #" + poId + "?\n\n" +
-        "OK = Push to configured printer (report printer) + save PDF\n" +
-        "Cancel = Preview in browser instead"
-    );
-    if (choice) {
-        await pushPOToPrintQueue(poId);
-    } else {
-        await previewPORow(poId);
-    }
-}
-
-async function previewPORow(poId) {
-    try {
-        const result = await apiCall("/purchase-orders/" + poId + "/print");
-        const html = result.html;
-        const w = window.open("", "PO_Preview_" + poId, "width=900,height=1000");
-        if (!w) { alert("Please allow popups to preview the PO."); return; }
-        w.document.write(html);
-        w.document.close();
-    } catch (err) {
-        showError(err);
-    }
-}
-
-async function pushPOToPrintQueue(poId) {
-    try {
-        const result = await apiCall("/purchase-orders/" + poId + "/print");
-        const html = result.html;
-
-        const enqueueResult = await apiCall("/print-queue/enqueue-report", "POST", {
-            report_type: "purchase-order",
-            title: "Purchase Order PO#" + poId,
-            payload: html,
-        });
-        showSuccess("PO #" + poId + " queued as job #" + enqueueResult.job_id + " \u2192 " + enqueueResult.printer_name);
-    } catch (err) {
-        showError(err);
-    }
+    showSuccess("Print will be wired in Stage 4 (Print PO document). For now, PO #" + poId + " is ready.");
 }
 
 // ============================================================
