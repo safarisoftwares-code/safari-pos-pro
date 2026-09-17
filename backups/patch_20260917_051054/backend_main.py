@@ -268,36 +268,6 @@ async def startup_event():
     except Exception as _e:
         print("[migrate] Auto-migration warning: " + str(_e))
 
-    # ------------------------------------------------------------------
-    #  Opt-in: auto-cleanup of failed/timeout M-Pesa sales (7+ days old)
-    # ------------------------------------------------------------------
-    try:
-        import sqlite3 as _sql2
-        with _sql2.connect(DB_PATH) as _c2:
-            _cur2 = _c2.cursor()
-            _cur2.execute("SELECT value FROM settings WHERE key = 'auto_cleanup_failed_sales'")
-            _row2 = _cur2.fetchone()
-            _auto = (_row2 and _row2[0] == "true")
-
-        if _auto:
-            from datetime import timedelta as _td
-            _cutoff = datetime.now() - _td(days=7)
-            with _sql2.connect(DB_PATH) as _c3:
-                _cur3 = _c3.cursor()
-                _cur3.execute(
-                    "SELECT id FROM sales WHERE payment_status IN ('failed','timeout') AND created_at < ?",
-                    (_cutoff.strftime("%Y-%m-%d %H:%M:%S"),),
-                )
-                _ids = [r[0] for r in _cur3.fetchall()]
-                if _ids:
-                    _ph = ",".join(["?"] * len(_ids))
-                    _cur3.execute(f"DELETE FROM sale_items WHERE sale_id IN ({_ph})", _ids)
-                    _cur3.execute(f"DELETE FROM sales WHERE id IN ({_ph})", _ids)
-                    _c3.commit()
-                    print(f"[cleanup] Auto-removed {len(_ids)} failed/timeout sale(s) older than 7 days")
-    except Exception as _e:
-        print(f"[cleanup] Auto-cleanup warning: {_e}")
-
     # Ensure admin exists
     db = SessionLocal()
     try:

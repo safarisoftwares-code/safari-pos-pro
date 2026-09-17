@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4.3">
+    <link rel="stylesheet" href="/static/css/style.css?v=4.2">
 </head>
 <body>
     <div class="dashboard-container">
@@ -67,7 +67,7 @@
                         <div class="product-grid" id="productGrid"></div>
                     </div>
                     <div class="cart-container" style="padding:10px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><h3 style="margin:0;color:#8b4513;font-size:14px">Current Sale</h3><button id="clearCartBtn" ondblclick="clearCartDoubleClick()" onclick="clearCartHint()" style="background:#d32f2f;color:white;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold" title="Double-click to clear the entire cart">Clear Cart</button></div>
+                        <h3 style="margin-bottom:5px;color:#8b4513;font-size:14px">Current Sale</h3>
                         <div class="cart-items" id="cartItems"><p style="color:#95a5a6;text-align:center;margin-top:50px">Cart is empty</p></div>
                         <div class="cart-total-section" style="margin-top:0;padding-top:0">
                             <div style="margin-bottom:3px;display:flex;align-items:center;gap:5px"><label style="font-size:10px;white-space:nowrap">Discount%:</label><input type="number" id="discountInput" value="0" style="width:60px;padding:2px;border:1px solid #ddd;border-radius:3px;font-size:11px"></div>
@@ -305,17 +305,17 @@
                     <p style="font-size:12px;color:#666">Generate a recovery code that lets you reset a forgotten admin password. Store it safely offline.</p>
                     <button onclick="generateRecoveryCode()" style="background:#2e7d32;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px;margin-bottom:10px">Generate Recovery Code</button>
                     <p style="font-size:12px;color:#666">Clear all demo/test data before giving to a real client. Keeps admin account and settings.</p>
-                    <button onclick="resetDemoData()" style="background:#d32f2f;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px">Reset Demo Data</button><p style="font-size:12px;color:#666;margin-top:15px">Delete M-Pesa sales that failed or timed out more than 7 days ago. Stock was never deducted for these, and they are not shown in reports. Safely removes database bloat.</p><button onclick="cleanupFailedSales()" style="background:#8b4513;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px">Purge Failed M-Pesa Sales</button>
+                    <button onclick="resetDemoData()" style="background:#d32f2f;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px">Reset Demo Data</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=4.3"></script>
-    <script src="/static/js/app.js?v=4.3"></script>
-    <script src="/static/js/main.js?v=4.3"></script>
-    <script src="/static/js/analytics.js?v=4.3"></script>
-    <script src="/static/js/tax.js?v=4.3"></script>
+    <script src="/static/js/auth.js?v=4.2"></script>
+    <script src="/static/js/app.js?v=4.2"></script>
+    <script src="/static/js/main.js?v=4.2"></script>
+    <script src="/static/js/analytics.js?v=4.2"></script>
+    <script src="/static/js/tax.js?v=4.2"></script>
 
     <!-- ============================== MODALS ============================== -->
 

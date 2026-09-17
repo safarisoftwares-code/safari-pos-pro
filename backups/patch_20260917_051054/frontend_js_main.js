@@ -627,50 +627,6 @@ function addToCart(productId) {
     updateCart();
 }
 
-
-
-// ============================================================
-//  Clear Cart (double-click safety)
-// ============================================================
-let _clearCartTimer = null;
-
-function clearCartHint() {
-    // First click - show hint on the button itself
-    const btn = document.getElementById("clearCartBtn");
-    if (!btn) return;
-    if (cart.length === 0) return; // nothing to clear, no hint
-    const original = btn.textContent;
-    btn.textContent = "Double-click!";
-    btn.style.background = "#ff9800";
-    setTimeout(function () {
-        if (btn.textContent === "Double-click!") {
-            btn.textContent = "Clear Cart";
-            btn.style.background = "#d32f2f";
-        }
-    }, 1500);
-}
-
-function clearCartDoubleClick() {
-    if (cart.length === 0) return;
-
-    cart = [];
-    discount = 0;
-    const di = document.getElementById("discountInput");
-    if (di) di.value = 0;
-    updateCart();
-
-    const btn = document.getElementById("clearCartBtn");
-    if (btn) {
-        btn.textContent = "Cleared";
-        btn.style.background = "#2e7d32";
-        setTimeout(function () {
-            btn.textContent = "Clear Cart";
-            btn.style.background = "#d32f2f";
-        }, 1200);
-    }
-    console.log("[cart] Cart cleared by user");
-}
-
 function removeFromCart(productId) {
     cart = cart.filter(i => i.product_id !== productId);
     updateCart();
@@ -2048,23 +2004,6 @@ async function generateRecoveryCode() {
     try {
         const result = await apiCall("/settings/generate-recovery-code", "POST");
         prompt("RECOVERY CODE - COPY THIS NOW!\n\n(Ctrl+C to copy)", result.code);
-    } catch (err) {
-        showError(err);
-    }
-}
-
-
-
-// ============================================================
-//  Cleanup failed M-Pesa sales (admin)
-// ============================================================
-async function cleanupFailedSales() {
-    if (prompt("This will PERMANENTLY DELETE M-Pesa sales that failed or timed out more than 7 days ago.\n\nType CLEANUP to confirm:") !== "CLEANUP") {
-        return;
-    }
-    try {
-        const result = await apiCall("/sales/cleanup-pending", "POST");
-        showSuccess("Cleanup complete.\n\nDeleted sales: " + result.deleted_sales + "\nDeleted items: " + result.deleted_items);
     } catch (err) {
         showError(err);
     }

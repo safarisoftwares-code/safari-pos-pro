@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import get_db, DB_PATH
 from models import Sale, SaleItem, Product, User
 from schemas import SaleCreate
@@ -657,58 +657,3 @@ async def get_sale_status(
         "mpesa_receipt": sale.mpesa_receipt,
         "paid_at": sale.paid_at.strftime("%Y-%m-%d %H:%M:%S") if sale.paid_at else None,
     }
-
-
-# ============================================================
-#  Cleanup: delete failed/timeout M-Pesa sales older than 7 days
-# ============================================================
-@router.post("/cleanup-pending")
-async def cleanup_pending_sales(
-    days: int = 7,
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Admin-only. Deletes orphaned pending-flow sales that failed or timed out.
-    Never touches 'paid', 'pending' (still-active), or 'completed' sales.
-    Stock was never deducted for these, so no inventory correction is needed.
-    """
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can cleanup sales")
-
-    cutoff = datetime.now() - timedelta(days=days)
-
-    # Find candidates
-    candidates = (
-        db.query(Sale)
-        .filter(
-            Sale.payment_status.in_(["failed", "timeout"]),
-            Sale.created_at < cutoff,
-        )
-        .all()
-    )
-
-    sale_ids = [s.id for s in candidates]
-    if not sale_ids:
-        return {"deleted_sales": 0, "deleted_items": 0, "message": "Nothing to clean up"}
-
-    # Delete items first, then sales
-    items_deleted = (
-        db.query(SaleItem)
-        .filter(SaleItem.sale_id.in_(sale_ids))
-        .delete(synchronize_session=False)
-    )
-    sales_deleted = (
-        db.query(Sale)
-        .filter(Sale.id.in_(sale_ids))
-        .delete(synchronize_session=False)
-    )
-    db.commit()
-
-    return {
-        "deleted_sales": int(sales_deleted),
-        "deleted_items": int(items_deleted),
-        "cutoff": cutoff.strftime("%Y-%m-%d %H:%M:%S"),
-        "message": f"Cleaned up {sales_deleted} sale(s) and {items_deleted} item(s)",
-    }
-
