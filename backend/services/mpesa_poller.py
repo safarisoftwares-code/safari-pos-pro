@@ -1,17 +1,12 @@
 """
-Safari POS Pro - M-Pesa Relay Poller (v4.1)
+Safari POS Pro - M-Pesa Relay Poller (v4.2)
 
-Background worker that polls the Cloudflare relay for pending M-Pesa callbacks
-and processes them, updating sales from "pending" to "paid" or "failed".
-
-v4.1 changes:
-  - IDLE SKIP: only hits the relay if a local sale has payment_status='pending'.
-    This eliminates ~99% of relay traffic and preserves Cloudflare's free-tier
-    KV list() quota (1,000/day).
-  - Poll interval increased 3s -> 5s.
-  - start_worker() now uses a lock + thread reference, so it can never
-    double-start even if called twice.
-  - stop_worker() joins the thread cleanly.
+v4.2 rewrite focuses on SQLite reliability:
+  - Every DB operation uses its own short-lived connection.
+  - No nested connections - which was causing "database is locked".
+  - busy_timeout=30000 set on every connection.
+  - _finalize_paid_sale is atomic (all stock + tax writes in one transaction).
+  - Idle-skip retained from v4.1: zero relay traffic when nothing pending.
 """
 
 import sqlite3
@@ -37,6 +32,10 @@ _worker_thread = None
 _stop_flag = False
 
 
+# ======================================================================
+#  Logging
+# ======================================================================
+
 def log_event(message: str):
     try:
         with open(MPESA_LOG, "a", encoding="utf-8") as f:
@@ -45,37 +44,198 @@ def log_event(message: str):
         print(f"[mpesa-poller] log write failed: {e}")
 
 
-def get_setting(key):
-    with sqlite3.connect(DB_PATH) as conn:
+# ======================================================================
+#  DB helpers - always short-lived connections, always committed or closed
+# ======================================================================
+
+def _open_db():
+    """Open a fresh SQLite connection with sane pragmas."""
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    # Ensure pragmas even outside SQLAlchemy
+    try:
         cur = conn.cursor()
-        cur.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cur.fetchone()
+        cur.execute("PRAGMA busy_timeout=30000")
+        cur.close()
+    except Exception:
+        pass
+    return conn
+
+
+def _db_read_one(sql: str, params: tuple = ()):
+    """Read one row. Always opens and closes its own connection."""
+    conn = _open_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def _db_read_all(sql: str, params: tuple = ()):
+    conn = _open_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def _db_write(sql: str, params: tuple = ()):
+    """Single write. Opens, commits, closes."""
+    conn = _open_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _db_write_many(statements):
+    """
+    Execute a list of (sql, params) inside ONE transaction on ONE connection.
+    All succeed or all roll back. Never nests.
+    """
+    conn = _open_db()
+    try:
+        cur = conn.cursor()
+        for sql, params in statements:
+            cur.execute(sql, params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ======================================================================
+#  Settings
+# ======================================================================
+
+def get_setting(key):
+    row = _db_read_one("SELECT value FROM settings WHERE key = ?", (key,))
     return row[0] if row else None
 
 
+# ======================================================================
+#  Pending-sale lookups
+# ======================================================================
+
 def has_pending_sale() -> bool:
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT 1 FROM sales WHERE payment_status = 'pending' LIMIT 1")
-            return cur.fetchone() is not None
+        row = _db_read_one(
+            "SELECT 1 FROM sales WHERE payment_status = 'pending' LIMIT 1"
+        )
+        return row is not None
     except Exception as e:
         log_event(f"has_pending_sale() error: {e}")
+        # Be conservative: assume there's a pending sale so we don't miss a callback
         return True
 
 
 def find_pending_sale_by_checkout(checkout_id: str):
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id FROM sales WHERE mpesa_checkout_id = ? AND payment_status = 'pending' LIMIT 1",
-            (checkout_id,),
-        )
-        row = cur.fetchone()
+    row = _db_read_one(
+        "SELECT id FROM sales WHERE mpesa_checkout_id = ? "
+        "AND payment_status = 'pending' LIMIT 1",
+        (checkout_id,),
+    )
     return row[0] if row else None
 
 
+# ======================================================================
+#  Finalize paid sale
+# ======================================================================
+
+def _finalize_paid_sale(sale_id: int):
+    """
+    After a sale is marked paid:
+      - Decrement stock for each item
+      - Write tax_ledger rows for each item
+
+    All in ONE transaction. Never opens more than one connection.
+    Retried by the caller on lock errors.
+    """
+    # Gather data first (read-only)
+    sale_row = _db_read_one(
+        "SELECT receipt_no, cashier_name, payment_method, created_at "
+        "FROM sales WHERE id = ?",
+        (sale_id,),
+    )
+    if not sale_row:
+        return
+    receipt_no, cashier_name, payment_method, created_at = sale_row
+
+    items = _db_read_all(
+        "SELECT si.product_id, si.quantity, si.unit_price, si.tax_rate, "
+        "si.tax_amount, p.name "
+        "FROM sale_items si "
+        "LEFT JOIN products p ON p.id = si.product_id "
+        "WHERE si.sale_id = ?",
+        (sale_id,),
+    )
+    if not items:
+        return
+
+    # Build all statements, then execute atomically
+    statements = []
+    for product_id, quantity, unit_price, tax_rate, tax_amount, product_name in items:
+        statements.append((
+            "UPDATE products SET stock = stock - ? WHERE id = ?",
+            (quantity, product_id),
+        ))
+        statements.append((
+            "INSERT INTO tax_ledger "
+            "(receipt_no, product_name, quantity, unit_price, tax_rate, "
+            "tax_amount, payment_method, cashier, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                receipt_no,
+                product_name or "Unknown",
+                quantity,
+                unit_price,
+                tax_rate or 0,
+                tax_amount or 0,
+                payment_method,
+                cashier_name or "Unknown",
+                created_at,
+            ),
+        ))
+
+    _db_write_many(statements)
+
+
+def _finalize_with_retry(sale_id: int, max_attempts: int = 3):
+    """Retry on SQLite lock errors."""
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            _finalize_paid_sale(sale_id)
+            return
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if "locked" in msg or "busy" in msg:
+                log_event(f"RETRY finalize #{sale_id} (attempt {attempt}/{max_attempts}): {e}")
+                time.sleep(2)
+            else:
+                raise
+    raise last_err if last_err else Exception("finalize failed")
+
+
+# ======================================================================
+#  Callback processing
+# ======================================================================
+
 def _process_one_callback(callback_data):
+    """
+    Handle one callback from the relay.
+
+    IMPORTANT: never opens two DB connections at once.
+    Each step uses its own short-lived connection, fully closed before the next.
+    """
     try:
         body = callback_data.get("Body", {})
         stk = body.get("stkCallback", {})
@@ -101,63 +261,42 @@ def _process_one_callback(callback_data):
                     mpesa_receipt = item.get("Value", "")
                     break
 
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            if result_code == 0:
-                cur.execute(
-                    "UPDATE sales SET payment_status = 'paid', status = 'completed', mpesa_receipt = ?, paid_at = ? WHERE id = ?",
-                    (mpesa_receipt, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), sale_id),
-                )
-                log_event(f"PAID sale #{sale_id} (M-Pesa: {mpesa_receipt})")
-                try:
-                    _finalize_paid_sale(sale_id)
-                except Exception as e:
-                    log_event(f"ERROR finalizing sale #{sale_id}: {e}")
-            else:
-                reason = "failed"
-                cur.execute(
-                    "UPDATE sales SET payment_status = ?, status = ? WHERE id = ?",
-                    (reason, reason, sale_id),
-                )
-                log_event(f"FAILED sale #{sale_id} (ResultCode={result_code})")
-            conn.commit()
+        if result_code == 0:
+            # STEP 1: mark sale as paid (its own connection, own commit)
+            _db_write(
+                "UPDATE sales SET payment_status = 'paid', status = 'completed', "
+                "mpesa_receipt = ?, paid_at = ? WHERE id = ?",
+                (
+                    mpesa_receipt,
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    sale_id,
+                ),
+            )
+            log_event(f"PAID sale #{sale_id} (M-Pesa: {mpesa_receipt})")
+
+            # STEP 2: finalize (fresh connection, retry on lock)
+            # Connection from step 1 is already closed here.
+            try:
+                _finalize_with_retry(sale_id)
+            except Exception as e:
+                log_event(f"ERROR finalizing sale #{sale_id} after retries: {e}")
+        else:
+            reason = "failed"
+            _db_write(
+                "UPDATE sales SET payment_status = ?, status = ? WHERE id = ?",
+                (reason, reason, sale_id),
+            )
+            log_event(f"FAILED sale #{sale_id} (ResultCode={result_code})")
+
         return True
     except Exception as e:
         log_event(f"ERROR processing callback: {e}")
         return False
 
 
-def _finalize_paid_sale(sale_id: int):
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT receipt_no, cashier_name, payment_method, created_at FROM sales WHERE id = ?",
-            (sale_id,),
-        )
-        sale_row = cur.fetchone()
-        if not sale_row:
-            return
-        receipt_no, cashier_name, payment_method, created_at = sale_row
-
-        cur.execute(
-            "SELECT si.product_id, si.quantity, si.unit_price, si.tax_rate, si.tax_amount, p.name "
-            "FROM sale_items si LEFT JOIN products p ON p.id = si.product_id WHERE si.sale_id = ?",
-            (sale_id,),
-        )
-        items = cur.fetchall()
-
-        for product_id, quantity, _, _, _, _ in items:
-            cur.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (quantity, product_id))
-
-        for product_id, quantity, unit_price, tax_rate, tax_amount, product_name in items:
-            cur.execute(
-                "INSERT INTO tax_ledger (receipt_no, product_name, quantity, unit_price, tax_rate, "
-                "tax_amount, payment_method, cashier, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (receipt_no, product_name or "Unknown", quantity, unit_price, tax_rate,
-                 tax_amount, payment_method, cashier_name or "Unknown", created_at),
-            )
-        conn.commit()
-
+# ======================================================================
+#  Relay poll
+# ======================================================================
 
 def _poll_relay_once():
     shop_id = get_setting("mpesa_shop_id")
@@ -167,11 +306,13 @@ def _poll_relay_once():
         import requests
         url = f"{RELAY_BASE_URL}/next/{shop_id}"
         r = requests.get(url, timeout=5)
+
         if r.status_code == 204:
             return False
         if r.status_code != 200:
             log_event(f"WARN: Relay returned {r.status_code}")
             return False
+
         callback_data = r.json()
         log_event(f"RELAY delivered callback for shop {shop_id}")
         return _process_one_callback(callback_data)
@@ -180,33 +321,54 @@ def _poll_relay_once():
         return False
 
 
+# ======================================================================
+#  Worker loop
+# ======================================================================
+
 def _worker_loop():
-    log_event("=== M-Pesa Poller started (v4.1 idle-skip) ===")
+    log_event("=== M-Pesa Poller started (v4.2 single-connection) ===")
     last_idle_log = 0.0
     while not _stop_flag:
         try:
             mpesa_enabled = get_setting("mpesa_enabled") == "true"
             shop_id = get_setting("mpesa_shop_id")
+
             if not mpesa_enabled or not shop_id:
-                time.sleep(POLL_INTERVAL_SECONDS)
+                _sleep_interruptible(POLL_INTERVAL_SECONDS)
                 continue
+
             if not has_pending_sale():
                 now = time.time()
                 if now - last_idle_log > IDLE_LOG_INTERVAL_SECONDS:
                     log_event("IDLE: no pending sales, skipping relay calls")
                     last_idle_log = now
-                time.sleep(POLL_INTERVAL_SECONDS)
+                _sleep_interruptible(POLL_INTERVAL_SECONDS)
                 continue
+
             processed = _poll_relay_once()
             if processed:
-                time.sleep(0.5)
+                _sleep_interruptible(0.5)
                 continue
-            time.sleep(POLL_INTERVAL_SECONDS)
+
+            _sleep_interruptible(POLL_INTERVAL_SECONDS)
         except Exception as e:
             log_event(f"WORKER ERROR: {e}")
-            time.sleep(POLL_INTERVAL_SECONDS)
+            _sleep_interruptible(POLL_INTERVAL_SECONDS)
     log_event("=== M-Pesa Poller stopped ===")
 
+
+def _sleep_interruptible(seconds: float):
+    """Sleep in small chunks so _stop_flag is honored within ~100ms."""
+    end = time.time() + seconds
+    while time.time() < end:
+        if _stop_flag:
+            return
+        time.sleep(0.1)
+
+
+# ======================================================================
+#  Lifecycle
+# ======================================================================
 
 def start_worker():
     global _worker_thread, _stop_flag
@@ -214,7 +376,9 @@ def start_worker():
         if _worker_thread is not None and _worker_thread.is_alive():
             return
         _stop_flag = False
-        _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="MpesaPoller")
+        _worker_thread = threading.Thread(
+            target=_worker_loop, daemon=True, name="MpesaPoller"
+        )
         _worker_thread.start()
 
 

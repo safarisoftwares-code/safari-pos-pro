@@ -26,36 +26,7 @@ def find_database_path():
 DB_PATH = find_database_path()
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,
-        "timeout": 30,  # wait up to 30s for SQLite locks instead of failing instantly
-    },
-)
-
-# ----------------------------------------------------------------------
-#  SQLite tuning: WAL mode + busy_timeout
-#
-#  Why: SQLite allows only one writer at a time. Without these settings,
-#  any concurrent write (poller + frontend + print processor) can throw
-#  "database is locked" and abort the transaction — silently losing data.
-#
-#  WAL mode lets readers work while a writer is active. busy_timeout tells
-#  SQLite to wait (up to N ms) instead of failing immediately.
-# ----------------------------------------------------------------------
-from sqlalchemy import event
-
-@event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, connection_record):
-    try:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")
-        cursor.close()
-    except Exception as e:
-        print(f"[database] PRAGMA warning: {e}")
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
