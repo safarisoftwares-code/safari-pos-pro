@@ -123,3 +123,19 @@ PHONE_SETUP_GUIDE.md
 Safari POS Pro Delivery/
 Safari-POS-Pro-Docs/
 Safari-POS-Pro.ico
+
+# Local patch backups — never commit
+backups/
+
+# SQLite WAL runtime artifacts — never commit
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Temp diagnostic scripts
+_diag.py
+_verify*.py
+_wal*.py
+_repair*.py
+_check*.py
+_dump*.py
