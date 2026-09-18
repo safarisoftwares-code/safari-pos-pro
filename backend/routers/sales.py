@@ -91,12 +91,6 @@ async def create_sale(
     total = subtotal - discount
 
     # Create sale
-    # _PENDING_DEBUG
-    print(f"[PENDING-DEBUG] subtotal={subtotal} total_tax={total_tax} discount={discount} total={total}")
-    print(f"[PENDING-DEBUG] items_count={len(req.items)} items_data_count={len(items_data)}")
-    for it in items_data:
-        print(f"[PENDING-DEBUG]   item={it['product'].name} qty={it['quantity']} unit={it['unit_price']} line={it['total_price']}")
-
     sale = Sale(
         receipt_no=generate_receipt_no(db),
         customer_id=sale_data.customer_id,

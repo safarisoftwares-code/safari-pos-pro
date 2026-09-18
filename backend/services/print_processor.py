@@ -72,6 +72,8 @@ def _extract_ref_from_html(html_payload, job_type="unknown"):
     return "unknown"
 
 
+
+
 def save_pdf_archive(job_type, html_payload, timestamp=None):
     """
     Render HTML to PDF and save it under:
@@ -329,11 +331,15 @@ def _send_to_printer(printer_name: str, html_payload: str) -> tuple:
         # Use Windows shell to print the file to the specific printer
         # This uses the default print action for .txt files
         import subprocess
+        import sys as _sys
         # Command: print /D:"printer name" "file"
         # Windows' built-in `print` command works for text files
+        # creationflags=CREATE_NO_WINDOW prevents the black console window flash
+        _no_window = 0x08000000 if _sys.platform == "win32" else 0
         result = subprocess.run(
             ["print", f"/D:{printer_name}", tmp_path],
             capture_output=True, text=True, timeout=30,
+            creationflags=_no_window,
         )
 
         # Clean up temp file
