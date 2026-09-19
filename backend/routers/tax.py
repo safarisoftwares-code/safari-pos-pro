@@ -85,7 +85,7 @@ async def tax_transactions(current_user=Depends(get_current_user), db: Session =
 #  Tax Ledger v2 - Archive endpoints
 # ============================================================
 
-from services import tax_archiver
+import services.tax_archiver as tax_archiver
 
 
 @router.get("/archive/summary")

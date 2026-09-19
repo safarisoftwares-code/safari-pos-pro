@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safari POS Pro — Starting</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #6b3410 0%, #8b4513 50%, #d2691e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    overflow: hidden;
+    user-select: none;
+}
+.splash-container { text-align: center; padding: 40px; max-width: 500px; width: 100%; }
+.logo-area { margin-bottom: 40px; animation: fadeInDown 0.6s ease-out; }
+.logo-circle {
+    width: 120px; height: 120px; margin: 0 auto 20px;
+    background: rgba(255,255,255,0.15);
+    border: 3px solid rgba(255,255,255,0.4);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px; font-weight: 900;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+    animation: pulse 2s ease-in-out infinite;
+}
+h1 { font-size: 34px; letter-spacing: 3px; font-weight: 800; margin-bottom: 8px; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+.slogan { font-size: 14px; font-style: italic; opacity: 0.85; letter-spacing: 1px; }
+.loader { margin: 30px 0; display: flex; justify-content: center; }
+.spinner { width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; }
+.status { font-size: 16px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.5px; }
+.substatus { font-size: 12px; opacity: 0.75; margin-bottom: 30px; min-height: 18px; }
+.progress-bar { width: 100%; max-width: 320px; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; margin: 0 auto; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffd700, #ffed4e); border-radius: 3px; transition: width 0.3s ease-out; box-shadow: 0 0 12px rgba(255,215,0,0.6); }
+.error-box { background: rgba(211, 47, 47, 0.95); border-radius: 12px; padding: 24px; margin-top: 30px; animation: fadeIn 0.3s ease-out; }
+.error-icon { font-size: 42px; margin-bottom: 10px; }
+.error-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.error-msg { font-size: 13px; opacity: 0.95; margin-bottom: 20px; line-height: 1.4; }
+.error-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; }
+.btn-retry, .btn-close { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.15s, background 0.2s; font-family: inherit; }
+.btn-retry { background: #fff; color: #d32f2f; }
+.btn-close { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+.btn-retry:hover, .btn-close:hover { transform: translateY(-2px); }
+.error-help { font-size: 11px; opacity: 0.7; font-family: 'Consolas', monospace; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="splash-container">
+    <div class="logo-area">
+        <div class="logo-circle">S</div>
+        <h1>SAFARI POS PRO</h1>
+        <p class="slogan">From Vision to Version</p>
+    </div>
+    <div class="loader"><div class="spinner"></div></div>
+    <div class="status" id="statusText">Starting server...</div>
+    <div class="substatus" id="subStatus"></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="error-box" id="errorBox" style="display:none">
+        <div class="error-icon">!</div>
+        <div class="error-title">Startup Failed</div>
+        <div class="error-msg" id="errorMsg">The server did not respond in time.</div>
+        <div class="error-actions">
+            <button onclick="location.reload()" class="btn-retry">Retry</button>
+            <button onclick="window.close()" class="btn-close">Close</button>
+        </div>
+        <div class="error-help">Check logs at: safari-pos-pro\logs\startup.log</div>
+    </div>
+</div>
+<script>
+const HEALTH_URL = "/health";
+const APP_URL = "/";
+const MAX_TRIES = 60;
+const INTERVAL_MS = 500;
+const statusText = document.getElementById("statusText");
+const subStatus = document.getElementById("subStatus");
+const progressFill = document.getElementById("progressFill");
+const errorBox = document.getElementById("errorBox");
+const errorMsg = document.getElementById("errorMsg");
+let tries = 0;
+const startTime = Date.now();
+function setProgress(pct) { progressFill.style.width = Math.min(pct, 100) + "%"; }
+function setStatus(msg, sub) { statusText.textContent = msg; if (sub !== undefined) subStatus.textContent = sub; }
+function showError(msg) {
+    document.querySelector(".loader").style.display = "none";
+    document.querySelector(".progress-bar").style.display = "none";
+    statusText.style.display = "none";
+    subStatus.style.display = "none";
+    errorMsg.textContent = msg;
+    errorBox.style.display = "block";
+}
+async function checkHealth() {
+    tries++;
+    setProgress((tries / MAX_TRIES) * 100);
+    const elapsed = Date.now() - startTime;
+    if (elapsed < 2000) setStatus("Starting server...", "Warming up, please wait");
+    else if (elapsed < 5000) setStatus("Loading database...", "Initializing");
+    else if (elapsed < 10000) setStatus("Almost ready...", "This is normal on first launch");
+    else setStatus("Still starting...", "Checking antivirus if this persists");
+    const minSplashTime = 1500;
+    if (elapsed < minSplashTime) { setTimeout(checkHealth, INTERVAL_MS); return; }
+    try {
+        const res = await fetch(HEALTH_URL, { method: "GET", cache: "no-store", signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.status === "healthy") {
+                setStatus("Ready!", "Redirecting to Safari POS Pro...");
+                setProgress(100);
+                setTimeout(() => { window.location.replace(APP_URL); }, 300);
+                return;
+            }
+        }
+    } catch (e) {}
+    if (tries >= MAX_TRIES) {
+        showError("The server did not start within 30 seconds. This can happen if antivirus blocked the app or if port 8001 is in use.");
+        return;
+    }
+    setTimeout(checkHealth, INTERVAL_MS);
+}
+window.addEventListener("load", () => { setTimeout(checkHealth, 300); });
+</script>
+</body>
+</html>

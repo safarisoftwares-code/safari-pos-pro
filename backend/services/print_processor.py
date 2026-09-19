@@ -72,12 +72,10 @@ def _extract_ref_from_html(html_payload, job_type="unknown"):
     return "unknown"
 
 
-
-
 def save_pdf_archive(job_type, html_payload, timestamp=None):
     """
     Render HTML to PDF and save it under:
-      <archive_folder>\YYYYMMDD\HH-MM-SS_<job_type>_<ref>.pdf
+      <archive_folder>\\YYYYMMDD\\HH-MM-SS_<job_type>_<ref>.pdf
 
     Returns (success, path_or_error).
     """
@@ -135,6 +133,7 @@ def save_pdf_archive(job_type, html_payload, timestamp=None):
         return True, target_path
     except Exception as e:
         return False, f"PDF render failed: {e}"
+
 
 # Config
 POLL_INTERVAL_SECONDS = 3
@@ -287,27 +286,24 @@ def retry_job(job_id: int) -> bool:
 
 def _send_to_printer(printer_name: str, html_payload: str) -> tuple:
     """
-    Send raw content to a Windows printer using win32print.
-    Returns (success: bool, error_message: str | None)
+    Send raw text content to a Windows printer using the win32print spooler API.
 
-    Note: win32print sends raw bytes to the spooler. For text-style
-    receipts this works. Full HTML rendering happens in Phase 7 via PDF.
+    Pure in-process - no subprocess, no cmd.exe, no console flash.
+    Returns (success: bool, error_message: str | None)
     """
     try:
         import win32print
     except ImportError as e:
         return False, f"win32print not installed: {e}"
 
-    # Verify the printer exists
     try:
         installed = [p[2] for p in win32print.EnumPrinters(2)]
         if printer_name not in installed:
-            return False, f"Printer '{printer_name}' not found on this machine"
+            return False, "Printer not found on this machine"
     except Exception as e:
         return False, f"Failed to enumerate printers: {e}"
 
     # Extract printable text from HTML
-    import re
     text = re.sub(r"<br\s*/?>", "\n", html_payload, flags=re.IGNORECASE)
     text = re.sub(r"</p>|</div>|</tr>|</h[1-6]>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
@@ -320,43 +316,24 @@ def _send_to_printer(printer_name: str, html_payload: str) -> tuple:
     if not text:
         text = "(empty receipt)"
 
-    # Write text to a temp file and print it
+    # Send directly to the Windows print spooler - no subprocess
     try:
-        import tempfile
-        fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix="safaripos_")
-        os.close(fd)
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(text)
-
-        # Use Windows shell to print the file to the specific printer
-        # This uses the default print action for .txt files
-        import subprocess
-        import sys as _sys
-        # Command: print /D:"printer name" "file"
-        # Windows' built-in `print` command works for text files
-        # creationflags=CREATE_NO_WINDOW prevents the black console window flash
-        _no_window = 0x08000000 if _sys.platform == "win32" else 0
-        result = subprocess.run(
-            ["print", f"/D:{printer_name}", tmp_path],
-            capture_output=True, text=True, timeout=30,
-            creationflags=_no_window,
-        )
-
-        # Clean up temp file
+        hPrinter = win32print.OpenPrinter(printer_name)
         try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-
-        if result.returncode != 0:
-            err = (result.stderr or result.stdout or "unknown error").strip()
-            return False, f"print command failed: {err}"
+            job_id = win32print.StartDocPrinter(hPrinter, 1, ("Safari POS Receipt", None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                payload_bytes = text.replace("\n", "\r\n").encode("cp1252", errors="replace")
+                win32print.WritePrinter(hPrinter, payload_bytes)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
 
         return True, None
-    except subprocess.TimeoutExpired:
-        return False, "print command timed out"
     except Exception as e:
-        return False, f"print error: {e}"
+        return False, f"spooler error: {e}"
 
 
 # ============================================================
@@ -396,7 +373,7 @@ def _process_one() -> bool:
 
     log_event(f"PROCESSING job #{job_id} type={job_type} printer={printer_name}")
 
-    # STEP 1: Save PDF archive (always — even if printer fails)
+    # STEP 1: Save PDF archive (always - even if printer fails)
     pdf_ok, pdf_path_or_err = save_pdf_archive(job_type, payload)
     if pdf_ok:
         log_event(f"PDF SAVED job #{job_id}: {pdf_path_or_err}")
@@ -448,7 +425,7 @@ def start_worker():
     """Start the background worker thread (idempotent)."""
     global WORKER_STARTED
     if WORKER_STARTED:
-        log_event("Worker already running — skipping start")
+        log_event("Worker already running - skipping start")
         return
     ensure_tables()
     t = threading.Thread(target=_worker_loop, daemon=True, name="PrintProcessor")

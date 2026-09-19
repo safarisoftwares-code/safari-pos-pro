@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db, DB_PATH
 from auth import get_current_user
-from services import print_processor
+import services.print_processor as print_processor
 from pydantic import BaseModel
 import sqlite3
 import os
