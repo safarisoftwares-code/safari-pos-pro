@@ -407,6 +407,7 @@ async function saveProduct() {
     const payload = {
         name: name,
         unit: document.getElementById("productUnit").value.trim() || null,
+        barcode: document.getElementById("productBarcode") ? document.getElementById("productBarcode").value.trim() || null : null,
         category_id: catVal ? parseInt(catVal) : null,
         price: parseFloat(priceRaw),
         cost: costVal ? parseFloat(costVal) : null,
@@ -435,6 +436,9 @@ async function openEditProductModal(productId) {
     document.getElementById("editProductId").value = product.id;
     document.getElementById("editProductName").value = product.name;
     document.getElementById("editProductUnit").value = product.unit || "";
+    if (document.getElementById("editProductBarcode")) {
+        document.getElementById("editProductBarcode").value = product.barcode || "";
+    }
     document.getElementById("editProductCategory").value = product.category_id || "";
     document.getElementById("editProductPrice").value = product.price;
     document.getElementById("editProductCost").value = product.cost || "";
@@ -462,6 +466,7 @@ async function saveEditedProduct() {
     const payload = {
         name: name,
         unit: document.getElementById("editProductUnit").value.trim() || null,
+        barcode: document.getElementById("editProductBarcode") ? document.getElementById("editProductBarcode").value.trim() || null : null,
         category_id: catVal ? parseInt(catVal) : null,
         price: parseFloat(priceRaw),
         cost: costVal ? parseFloat(costVal) : null,
