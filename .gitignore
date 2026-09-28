@@ -139,3 +139,6 @@ _wal*.py
 _repair*.py
 _check*.py
 _dump*.py
+database/*.OLD_*
+database/*.PRE-*
+database/*.BROKEN_*
