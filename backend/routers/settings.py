@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db, DB_PATH
 from auth import get_current_user, hash_password
@@ -95,39 +95,17 @@ async def update_business_info(data: dict, current_user=Depends(get_current_user
 
 
 @router.post("/reset-demo")
-async def reset_demo_data(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def reset_demo_data(confirm_phrase: str = "", current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admin can reset demo data")
-
-    backup_dir = os.path.join(os.path.dirname(DB_PATH), "..", "backups")
-    backup_dir = os.path.abspath(backup_dir)
-    os.makedirs(backup_dir, exist_ok=True)
-
-    backup_name = f"safaripos_before_reset_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    backup_path = os.path.join(backup_dir, backup_name)
+    if confirm_phrase != "DELETE-ALL-DATA":
+        raise HTTPException(status_code=400, detail="Type DELETE-ALL-DATA to confirm")
+    desktop_backup = os.path.join(os.path.expanduser("~"), "Desktop", "Safari-POS Backup")
+    os.makedirs(desktop_backup, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(desktop_backup, f"BEFORE-RESET_{stamp}.db")
     shutil.copy2(DB_PATH, backup_path)
-
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        for table in ["sale_items", "sales", "tax_ledger", "purchase_orders",
-                      "products", "categories", "customers"]:
-            try:
-                cursor.execute(f"DELETE FROM {table}")
-            except Exception as e:
-                print(f"[reset-demo] warning clearing {table}: {e}")
-        cursor.execute("DELETE FROM users WHERE role != 'admin'")
-        conn.commit()
-
-    return {
-        "message": "Demo data reset. Admin and settings preserved.",
-        "backup_created": backup_path,
-    }
-
-
-# ============================================================
-#  Recovery code (one-time use, hashed)
-# ============================================================
-
+    print(f"[reset-demo] Backup saved to: {backup_path}")
 def _hash_code(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
@@ -144,7 +122,7 @@ async def generate_recovery_code(current_user=Depends(get_current_user), db: Ses
     set_setting("recovery_code_used", "false")
 
     return {
-        "message": "Recovery code generated. WRITE IT DOWN NOW — it will not be shown again!",
+        "message": "Recovery code generated. WRITE IT DOWN NOW â€” it will not be shown again!",
         "code": code,
     }
 
@@ -201,3 +179,4 @@ async def reset_password_with_code(data: dict, db: Session = Depends(get_db)):
 
     set_setting("recovery_code_used", "true")
     return {"message": "Password reset successful. Login with new password."}
+
