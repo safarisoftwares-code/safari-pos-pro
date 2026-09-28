@@ -1,4 +1,4 @@
-"""
+﻿"""
 Safari POS Pro - Backend entry point
 
 Two modes:
@@ -25,7 +25,7 @@ from auth import hash_password
 from routers import (
     auth, products, sales, customers, reports, users,
     backup, settings, purchase_orders, analytics, mpesa, tax, printers,
-    print_queue,
+    print_queue, quotations,
 )
 import services.tax_archiver as tax_archiver
 import services.print_processor as print_processor
@@ -79,6 +79,7 @@ app.include_router(mpesa.router,           prefix="/api/v1/mpesa",            ta
 app.include_router(tax.router,             prefix="/api/v1/tax",              tags=["tax"])
 app.include_router(printers.router,        prefix="/api/v1/printers",         tags=["printers"])
 app.include_router(print_queue.router,     prefix="/api/v1/print-queue",      tags=["print-queue"])
+app.include_router(quotations.router,      prefix="/api/v1/quotations",       tags=["quotations"])
 
 
 # ------------------------------------------------------------
@@ -370,71 +371,50 @@ def _find_edge():
 
 def run_launcher_mode():
     """
-    Launcher mode - called when EXE is run with --launcher.
+    Native launcher mode: called when EXE is run with --launcher.
+    Fully self-contained. No VBS, no subprocess of self, no external files.
 
-    Simplified approach:
-      1. If /health already responds -> reuse running server.
-      2. Else start the FastAPI server IN-PROCESS (in a background thread).
-      3. Wait for /health to respond.
-      4. Open Edge in app-mode pointing at /splash.
-      5. Wait for Edge to exit.
-      6. os._exit(0) to kill everything (threads, server, ourselves).
-
-    This avoids subprocess management entirely, works identically in
-    dev and frozen EXE, and cannot get stuck on stale processes.
+    1. If port 8001 already responds -> skip server start (reuse)
+    2. Else start the FastAPI server in a daemon thread
+    3. Wait for /health
+    4. Find Edge
+    5. Launch Edge in --app mode at /splash
+    6. Wait for THAT Edge process to exit (we own the handle)
+    7. os._exit(0) -> kills server thread + everything
     """
-    import time
-    import threading
+    import time, threading, subprocess
 
-    we_started_server = False
+    CREATE_NO_WINDOW = 0x08000000
 
-    # Step 1: Is a server already running?
     if not _is_server_up():
-        # Step 2: Start the server in a background thread
         try:
             import uvicorn
-            def _run_server():
+            def _run():
                 try:
                     uvicorn.run(app, host="0.0.0.0", port=8001, log_config=None, access_log=False)
                 except Exception as e:
-                    print(f"[launcher] server thread error: {e}")
-
-            t = threading.Thread(target=_run_server, daemon=True, name="ServerThread")
-            t.start()
-            we_started_server = True
+                    print(f"[launcher] server thread: {e}")
+            threading.Thread(target=_run, daemon=True, name="ServerThread").start()
         except Exception as e:
-            print(f"[launcher] Failed to start server thread: {e}")
+            print(f"[launcher] failed to start server: {e}")
             return 1
 
-        # Wait for /health
         if not _wait_for_server_up(max_seconds=30):
-            print("[launcher] Server did not become healthy in 30s")
+            print("[launcher] server never came up")
             return 1
 
-    # Step 3: Find Edge
     edge = _find_edge()
     if not edge:
-        print("[launcher] Microsoft Edge not found; opening default browser")
-        try:
-            import webbrowser
-            webbrowser.open("http://localhost:8001/")
-            time.sleep(60)
-        finally:
-            os._exit(0)
-        return 0
+        print("[launcher] Edge not found")
+        return 1
 
-    # Step 4: Launch Edge in app-mode
-    import subprocess
-    CREATE_NO_WINDOW = 0x08000000
-
-    # Dedicated user-data-dir (under logs so it's easy to find and safe to nuke)
     edge_profile = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "logs", ".edge-profile"
     )
     os.makedirs(edge_profile, exist_ok=True)
 
-    edge_args = [
+    args = [
         edge,
         "--app=http://localhost:8001/splash",
         "--disable-http-cache",
@@ -443,84 +423,21 @@ def run_launcher_mode():
         "--no-first-run",
         "--no-default-browser-check",
     ]
-
     try:
-        edge_proc = subprocess.Popen(edge_args, creationflags=CREATE_NO_WINDOW)
+        proc = subprocess.Popen(args, creationflags=CREATE_NO_WINDOW)
     except Exception as e:
-        print(f"[launcher] Failed to launch Edge: {e}")
-        os._exit(0)
+        print(f"[launcher] Edge launch failed: {e}")
         return 1
 
-    # Step 5: Wait for Edge to exit
+    # Wait for the exact Edge process we launched to exit.
+    # No WMI, no window scanning, no timing heuristics. Bulletproof.
     try:
-        edge_proc.wait()
+        proc.wait()
     except KeyboardInterrupt:
         pass
 
-    # Step 6: Exit hard. Daemon threads (server, workers) die with us.
-    print("[launcher] Edge closed; shutting down server")
     time.sleep(0.5)
     os._exit(0)
-
-    # Step 5: Launch Edge in app-mode
-    # Dedicated user-data-dir so we can find THIS Edge process by command line
-    edge_profile = os.path.join(
-        os.path.dirname(os.path.abspath(__file__ if getattr(sys, "frozen", False) else __file__)),
-        ".edge-profile"
-    )
-    os.makedirs(edge_profile, exist_ok=True)
-
-    edge_args = [
-        edge,
-        "--app=http://localhost:8001/splash",
-        "--disable-http-cache",
-        f"--user-data-dir={edge_profile}",
-        "--start-maximized",
-        "--no-first-run",
-        "--no-default-browser-check",
-    ]
-
-    try:
-        edge_proc = subprocess.Popen(edge_args, creationflags=CREATE_NO_WINDOW)
-    except Exception as e:
-        print(f"[launcher] Failed to launch Edge: {e}")
-        if we_started_server and server_proc:
-            try:
-                server_proc.terminate()
-            except Exception:
-                pass
-        return 1
-
-    # Step 6: Wait for Edge to exit
-    try:
-        edge_proc.wait()
-    except KeyboardInterrupt:
-        pass
-
-    # Step 7: Kill the server we started
-    if we_started_server and server_proc:
-        try:
-            # Try graceful shutdown endpoint first
-            import urllib.request
-            try:
-                req = urllib.request.Request("http://localhost:8001/__shutdown__", method="POST")
-                urllib.request.urlopen(req, timeout=2)
-            except Exception:
-                pass
-            # Give it a moment to exit cleanly
-            time.sleep(1.0)
-            # Force-kill if still alive
-            if server_proc.poll() is None:
-                server_proc.terminate()
-                try:
-                    server_proc.wait(timeout=5)
-                except Exception:
-                    server_proc.kill()
-        except Exception as e:
-            print(f"[launcher] Error stopping server: {e}")
-
-    return 0
-
 
 # ============================================================
 #  ENTRY POINT

@@ -95,7 +95,7 @@ async function apiCall(url, method, data) {
 function showView(viewName) {
     const user = authManager.getUser();
     if (user && user.role === "cashier") {
-        const allowed = ["dashboard", "pos", "receipts"];
+        const allowed = ["dashboard", "pos", "receipts", "quotations"];
         if (!allowed.includes(viewName)) {
             alert("Access denied.");
             return;
@@ -137,6 +137,7 @@ function showView(viewName) {
               typeof loadTaxArchive === "function" && loadTaxArchive();
           },
         receipts: () => typeof loadReceiptHistory === "function" && loadReceiptHistory(),
+        quotations: () => typeof loadQuotations === "function" && loadQuotations(),
         purchaseOrders: () => typeof loadPurchaseOrders === "function" && loadPurchaseOrders(),
         suppliers: () => typeof loadSuppliers === "function" && loadSuppliers(),
         settings: () => {
@@ -695,6 +696,23 @@ function updateQuantity(productId, change) {
     updateCart();
 }
 
+function setQuantity(productId, newQty) {
+    const item = cart.find(i => i.product_id === productId);
+    if (!item) return;
+    const qty = parseInt(newQty);
+    if (isNaN(qty) || qty < 1) {
+        updateCart();
+        return;
+    }
+    if (qty > item.stock) {
+        alert("NOT ENOUGH STOCK! Only " + item.stock + " available.");
+        updateCart();
+        return;
+    }
+    item.quantity = qty;
+    updateCart();
+}
+
 function updateCart() {
     const cartDiv = document.getElementById("cartItems");
     let subtotal = 0, taxAmount = 0;
@@ -724,7 +742,7 @@ function updateCart() {
                     "<br><small style=\"color:#666;font-size:9px\">KSh " + i.unit_price + " each</small></div>" +
                     "<div style=\"flex:1;display:flex;align-items:center;gap:8px;justify-content:center\">" +
                     "<button onclick=\"updateQuantity(" + i.product_id + ",-1)\" style=\"width:24px;height:24px;font-size:12px;background:#f0f0f0;color:#333;border:1px solid #ddd;border-radius:3px;cursor:pointer\">-</button>" +
-                    "<span style=\"font-size:11px;font-weight:bold;min-width:20px;text-align:center\">" + i.quantity + "</span>" +
+                    "<input type=\"number\" value=\"" + i.quantity + "\" min=\"1\" max=\"" + i.stock + "\" onchange=\"setQuantity(" + i.product_id + ", this.value)\" onkeydown=\"if(event.key===String.fromCharCode(13)){this.blur();}\" style=\"width:50px;font-size:11px;font-weight:bold;text-align:center;padding:2px;border:1px solid #ddd;border-radius:3px\">" +
                     "<button onclick=\"updateQuantity(" + i.product_id + ",1)\" style=\"width:24px;height:24px;font-size:12px;background:#f0f0f0;color:#333;border:1px solid #ddd;border-radius:3px;cursor:pointer\">+</button></div>" +
                     "<div style=\"flex:1.5;text-align:right\"><strong style=\"font-size:11px\">KSh " + lineTotal.toFixed(2) + "</strong> " +
                     "<small style=\"color:#d2691e;font-size:9px\">Tax:" + lineTax.toFixed(2) + "</small></div>" +
@@ -2872,3 +2890,162 @@ async function printReport(reportType) {
         showError(e);
     }
 }
+
+// ============================================================
+//  Quotations (Patch 2)
+// ============================================================
+
+let quoteCart = [];
+
+async function loadQuotations() {
+    try {
+        const qs = await apiCall("/quotations/");
+        const tbody = document.getElementById("quotationsTableBody");
+        if (!tbody) return;
+        if (!qs || qs.length === 0) {
+            tbody.innerHTML = "<tr><td colspan=\"5\" style=\"color:#999\">No quotations yet</td></tr>";
+            return;
+        }
+        tbody.innerHTML = qs.map(q =>
+            "<tr><td>" + q.quote_no + "</td><td>" + q.created_at + "</td><td>" + q.cashier +
+            "</td><td>KSh " + q.total_amount.toFixed(2) +
+            "</td><td><button onclick=\"previewQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;background:#0088cc;color:white;border:none;border-radius:3px\">View</button>" +
+            "<button onclick=\"printQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px\">Print</button>" +
+            "<button onclick=\"deleteQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;color:red\">Delete</button>" +
+            "</td></tr>"
+        ).join("");
+    } catch (e) {
+        console.error("[loadQuotations]", e);
+    }
+}
+
+function openQuotationBuilder() {
+    // Simplest path: use the existing POS cart, but tag it as a quote.
+    // For v1: build quote from the current cart state.
+    if (cart.length === 0) {
+        alert("Add items to the cart first, then click New Quotation to save them as a quote.");
+        return;
+    }
+    const total = cart.reduce((s, i) => s + i.quantity * i.unit_price, 0) * (1 - discount/100);
+    if (!confirm("Save current cart as a quotation for KSh " + total.toFixed(2) + "?")) return;
+    saveQuotationFromCart();
+}
+
+async function saveQuotationFromCart() {
+    try {
+        const payload = {
+            items: cart.map(i => ({
+                product_id: i.product_id,
+                quantity: i.quantity,
+                unit_price: i.unit_price,
+            })),
+            discount: discount,
+            notes: "",
+        };
+        const r = await apiCall("/quotations/", "POST", payload);
+        showSuccess("Quotation " + r.quote_no + " saved.");
+        cart = [];
+        discount = 0;
+        const d = document.getElementById("discountInput");
+        if (d) d.value = 0;
+        updateCart();
+        loadQuotations();
+    } catch (e) {
+        showError(e);
+    }
+}
+
+function buildQuotationHtml(q) {
+    let itemsHtml = "";
+    let totalA_amount = 0, totalA_tax = 0, totalB_amount = 0;
+    q.items.forEach(item => {
+        const taxRate = item.tax_rate || 0;
+        const taxLabel = taxRate > 0 ? "A" : "B";
+        const lineTotal = item.total_price;
+        const lineTax = item.tax_amount || 0;
+        itemsHtml += "<tr>" +
+            "<td style='padding:2px 0'>" + item.product_name + (item.unit ? " (" + item.unit + ")" : "") + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + item.quantity + "</td>" +
+            "<td style='text-align:center;padding:2px 0'>" + taxLabel + "</td>" +
+            "<td style='text-align:right;padding:2px 0'>" + lineTotal.toFixed(2) + "</td>" +
+            "</tr>";
+        if (taxRate > 0) { totalA_amount += lineTotal; totalA_tax += lineTax; }
+        else { totalB_amount += lineTotal; }
+    });
+    const aVatableNet = totalA_amount / 1.16;
+    const bs = businessSettings || {};
+    return "<!DOCTYPE html><html><head><title>Quotation " + q.quote_no + "</title><style>" +
+        "body{font-family:'Courier New',monospace;padding:15px;max-width:320px;margin:auto;font-size:11px;color:#000;line-height:1.5}" +
+        ".h{text-align:center;margin-bottom:8px}.h h2{margin:0;font-size:15px;font-weight:bold}.h p{margin:2px 0;font-size:10px}" +
+        "hr{border:none;border-top:1px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:10px}" +
+        "td,th{padding:2px 0}.kv{display:flex;justify-content:space-between;font-size:10px;padding:1px 0}" +
+        ".storeline{display:flex;justify-content:space-between;font-size:11px;margin:6px 0}" +
+        ".total-row{font-weight:bold;font-size:12px}.left-note{text-align:left;font-size:9px;margin:8px 0}" +
+        ".badge{text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:6px;margin:8px 0;font-weight:bold;font-size:12px;color:#8b4513}" +
+        ".small{font-size:9px;color:#555;text-align:center;margin-top:6px}" +
+        "</style></head><body>" +
+        "<div class='h'>" +
+        "<div style='font-size:15px;font-weight:bold;margin:0;line-height:1.2'>" + (bs.business_name || "Safari POS") + "</div>" +
+        "<p>" + [bs.business_po_box, bs.business_location].filter(Boolean).join(", ") + "</p>" +
+        "<div style='display:flex;justify-content:space-between;font-size:10px;margin-top:2px'><span>PIN: " + (bs.business_tax_pin || "-") + "</span><span>Tel: " + (bs.business_phone || "-") + "</span></div>" +
+        "</div>" +
+        "<hr>" +
+        "<div style='font-size:10px'>Quote No: " + q.quote_no + "</div>" +
+        "<div style='font-size:10px'>Date: " + q.created_at + "</div>" +
+        "<div class='storeline'><span>STORE: " + (bs.store_name || "-") + "</span><span>REG. NO.: " + (bs.reg_no || "-") + "</span></div>" +
+        "<div class='badge'>*** QUOTATION ***</div>" +
+        "<hr>" +
+        "<table><thead><tr><th style='text-align:left'>Item</th><th style='text-align:center'>Qty</th><th style='text-align:center'>Tax</th><th style='text-align:right'>Amount</th></tr></thead><tbody>" +
+        itemsHtml + "</tbody></table>" +
+        "<hr>" +
+        "<div class='kv'><span>Subtotal:</span><span>" + q.subtotal.toFixed(2) + "</span></div>" +
+        "<div class='kv'><span>Tax (incl.):</span><span>" + q.tax_amount.toFixed(2) + "</span></div>" +
+        "<div class='kv total-row'><span>TOTAL:</span><span>KSh " + q.total_amount.toFixed(2) + "</span></div>" +
+        "<hr>" +
+        "<table style='font-size:10px'><thead><tr><th style='text-align:left'>CODE</th><th>RATE</th><th style='text-align:right'>VATABLE AMT</th><th style='text-align:right'>VAT AMT</th></tr></thead><tbody>" +
+        "<tr><td>A</td><td>16%</td><td style='text-align:right'>" + aVatableNet.toFixed(2) + "</td><td style='text-align:right'>" + totalA_tax.toFixed(2) + "</td></tr>" +
+        "<tr><td>B</td><td>0%</td><td style='text-align:right'>" + totalB_amount.toFixed(2) + "</td><td style='text-align:right'>0.00</td></tr>" +
+        "</tbody></table>" +
+        "<div class='left-note'>PRICES INCLUSIVE OF VAT WHERE APPLICABLE</div>" +
+        "<hr>" +
+        "<div style='font-size:10px'>PREPARED BY: " + (q.cashier || "N/A").toUpperCase() + "</div>" +
+        "<div class='left-note'>This is a quotation, not a receipt. Prices valid at time of issue.</div>" +
+        "<div class='small'>&copy; 2026 Safari Softwares &mdash; From Vision to Version</div>" +
+        "</body></html>";
+}
+
+async function previewQuotation(quoteId) {
+    try {
+        const q = await apiCall("/quotations/" + quoteId);
+        const html = buildQuotationHtml(q);
+        const w = window.open("", "QuotePreview", "width=420,height=640");
+        if (!w) { alert("Allow popups to preview."); return; }
+        w.document.write(html);
+        w.document.close();
+    } catch (e) { showError(e); }
+}
+
+async function printQuotation(quoteId) {
+    try {
+        const q = await apiCall("/quotations/" + quoteId);
+        const html = buildQuotationHtml(q);
+        await apiCall("/print-queue/enqueue-report", "POST", {
+            report_type: "quotation",
+            title: "Quotation " + q.quote_no,
+            payload: html,
+        });
+        showSuccess("Quotation sent to printer.");
+    } catch (e) { showError(e); }
+}
+
+async function deleteQuotation(quoteId) {
+    if (prompt("Type DELETE to confirm:") !== "DELETE") return;
+    try {
+        await apiCall("/quotations/" + quoteId, "DELETE");
+        showSuccess("Quotation deleted.");
+        loadQuotations();
+    } catch (e) {
+        showError(e);
+    }
+}
+

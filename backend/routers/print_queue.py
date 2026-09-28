@@ -175,7 +175,9 @@ async def enqueue_report(
     Queue a report print job. Uses the configured REPORT printer.
     Reports are always archived as PDFs by the print processor.
     """
-    if current_user.role not in ["admin", "manager"]:
+    # Quotations are personal documents - any authenticated user can print their own.
+    # Reports (daily-close, profit, etc.) remain admin/manager only.
+    if req.report_type != "quotation" and current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Only admin or manager can print reports")
 
     printer_name = _get_setting("report_printer") or ""

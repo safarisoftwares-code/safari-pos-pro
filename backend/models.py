@@ -154,3 +154,40 @@ class PurchaseOrderItem(Base):
     received = Column(Boolean, default=False)
     received_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+
+# ====================================================================
+# Quotations (Patch 2 - v4.0.1)
+# Each user sees only their own quotations.
+# No stock change, no tax ledger, no payment.
+# ====================================================================
+
+class Quotation(Base):
+    __tablename__ = "quotations"
+    id = Column(Integer, primary_key=True, index=True)
+    quote_no = Column(String, unique=True, nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    cashier_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    cashier_name = Column(String, nullable=True)
+    subtotal = Column(Float, default=0)
+    tax_amount = Column(Float, default=0)
+    discount = Column(Float, default=0)
+    total_amount = Column(Float, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    items = relationship("QuotationItem", back_populates="quotation", cascade="all, delete-orphan")
+
+
+class QuotationItem(Base):
+    __tablename__ = "quotation_items"
+    id = Column(Integer, primary_key=True, index=True)
+    quotation_id = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_name = Column(String, nullable=False)
+    unit = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    tax_rate = Column(Float, default=0)
+    tax_amount = Column(Float, default=0)
+    total_price = Column(Float, nullable=False)
+    quotation = relationship("Quotation", back_populates="items")
+

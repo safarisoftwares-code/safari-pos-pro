@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4.7">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.1">
 </head>
 <body>
     <div class="dashboard-container">
@@ -24,9 +24,9 @@
                 <li><a onclick="showView(&#39;tax&#39;)">Tax</a></li>
                 <li><a onclick="showView(&#39;printQueue&#39;)">Print Queue</a></li>
                 <li><a onclick="showView(&#39;receipts&#39;)">Receipts</a></li>
+                <li><a onclick="showView(&#39;quotations&#39;)">Quotations</a></li>
                 <li><a onclick="showView(&#39;purchaseOrders&#39;)">Purchase Orders</a></li>
-                <li><a onclick="showView(&#39;suppliers&#39;)">Suppliers</a></li>
-                <li><a onclick="showView(&#39;backup&#39;)">Backup</a></li>
+                                <li><a onclick="showView(&#39;backup&#39;)">Backup</a></li>
                 <li><a onclick="showView(&#39;settings&#39;)">Settings</a></li>
             </ul>
         </div>
@@ -197,7 +197,21 @@
             </div>
 
             <!-- ============================== RECEIPTS ============================== -->
-            <div id="receipts" class="view" style="display:none;">
+            
+            <div id="quotations" class="view" style="display:none;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+                    <h2>Quotations</h2>
+                    <button class="btn btn-primary" onclick="openQuotationBuilder()" style="width:auto;padding:10px 20px">New Quotation</button>
+                </div>
+                <div class="data-table">
+                    <table style="width:100%">
+                        <thead><tr><th>Quote No</th><th>Date</th><th>Cashier</th><th>Total</th><th>Actions</th></tr></thead>
+                        <tbody id="quotationsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+<div id="receipts" class="view" style="display:none;">
                 <h2 style="margin-bottom:20px">Receipt History</h2>
                 <div class="data-table"><table style="width:100%"><thead><tr><th>Receipt</th><th>Date</th><th>Cashier</th><th>Items</th><th>Total</th><th>Actions</th></tr></thead><tbody id="receiptHistoryBody"></tbody></table></div>
             </div>
@@ -329,11 +343,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=4.7"></script>
-    <script src="/static/js/app.js?v=4.7"></script>
-    <script src="/static/js/main.js?v=4.7"></script>
-    <script src="/static/js/analytics.js?v=4.7"></script>
-    <script src="/static/js/tax.js?v=4.7"></script>
+    <script src="/static/js/auth.js?v=5.1"></script>
+    <script src="/static/js/app.js?v=5.1"></script>
+    <script src="/static/js/main.js?v=5.1"></script>
+    <script src="/static/js/analytics.js?v=5.1"></script>
+    <script src="/static/js/tax.js?v=5.1"></script>
 
     <!-- ============================== MODALS ============================== -->
 
