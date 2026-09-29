@@ -143,3 +143,59 @@ async def delete_quotation(quote_id: int, current_user=Depends(get_current_user)
     db.delete(q)
     db.commit()
     return {"message": f"Quotation {q.quote_no} deleted"}
+
+@router.put("/{quote_id}")
+async def update_quotation(
+    quote_id: int,
+    data: QuoteIn,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(Quotation).filter(Quotation.id == quote_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+    if q.cashier_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your quotation")
+
+    # Delete old items
+    db.query(QuotationItem).filter(QuotationItem.quotation_id == q.id).delete()
+
+    # Recompute items from payload
+    subtotal = 0.0
+    total_tax = 0.0
+    items_data = []
+    for it in data.items:
+        product = db.query(Product).filter(Product.id == it.product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {it.product_id} not found")
+        line_total = it.quantity * it.unit_price
+        rate = product.tax_rate or 0
+        line_tax = line_total - (line_total / (1 + rate/100)) if rate > 0 else 0.0
+        subtotal += line_total
+        total_tax += line_tax
+        items_data.append({
+            "product_id": product.id,
+            "product_name": product.name,
+            "unit": product.unit,
+            "quantity": it.quantity,
+            "unit_price": it.unit_price,
+            "tax_rate": rate,
+            "tax_amount": line_tax,
+            "total_price": line_total,
+        })
+
+    discount = data.discount or 0.0
+    total = subtotal - discount
+
+    q.subtotal = subtotal
+    q.tax_amount = total_tax
+    q.discount = discount
+    q.total_amount = total
+    if data.notes is not None:
+        q.notes = data.notes
+
+    for it in items_data:
+        db.add(QuotationItem(quotation_id=q.id, **it))
+    db.commit()
+    return {"id": q.id, "quote_no": q.quote_no, "total_amount": total, "updated": True}
+

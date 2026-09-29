@@ -2909,7 +2909,8 @@ async function loadQuotations() {
         tbody.innerHTML = qs.map(q =>
             "<tr><td>" + q.quote_no + "</td><td>" + q.created_at + "</td><td>" + q.cashier +
             "</td><td>KSh " + q.total_amount.toFixed(2) +
-            "</td><td><button onclick=\"previewQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;background:#0088cc;color:white;border:none;border-radius:3px\">View</button>" +
+            "</td><td><button onclick=\"editQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;background:#d2691e;color:white;border:none;border-radius:3px\">Edit</button>" +
+            "<button onclick=\"previewQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;background:#0088cc;color:white;border:none;border-radius:3px\">View</button>" +
             "<button onclick=\"printQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px\">Print</button>" +
             "<button onclick=\"deleteQuotation(" + q.id + ")\" style=\"padding:4px 10px;font-size:11px;cursor:pointer;color:red\">Delete</button>" +
             "</td></tr>"
@@ -3043,6 +3044,91 @@ async function deleteQuotation(quoteId) {
     try {
         await apiCall("/quotations/" + quoteId, "DELETE");
         showSuccess("Quotation deleted.");
+        loadQuotations();
+    } catch (e) {
+        showError(e);
+    }
+}
+
+// ============================================================
+//  Edit Quotation (Patch 6)
+// ============================================================
+
+let editingQuoteId = null;
+
+async function editQuotation(quoteId) {
+    try {
+        const q = await apiCall("/quotations/" + quoteId);
+        // Load into cart
+        cart = q.items.map(it => {
+            const prod = products.find(p => p.name === it.product_name);
+            return {
+                product_id: prod ? prod.id : null,
+                name: it.product_name,
+                unit: it.unit,
+                quantity: it.quantity,
+                unit_price: it.unit_price,
+                tax_rate: it.tax_rate || 0,
+                stock: prod ? prod.stock : 0,
+            };
+        });
+        if (cart.some(i => i.product_id === null)) {
+            alert("Some products in this quote were deleted from the catalog. They will be removed when you save.");
+            cart = cart.filter(i => i.product_id !== null);
+        }
+        discount = q.discount || 0;
+        const d = document.getElementById("discountInput");
+        if (d) d.value = discount;
+        editingQuoteId = quoteId;
+        updateCart();
+        // Switch to POS view
+        if (typeof showView === "function") showView("pos");
+        // Add banner
+        setTimeout(() => {
+            const banner = document.getElementById("editQuoteBanner");
+            if (!banner) {
+                const b = document.createElement("div");
+                b.id = "editQuoteBanner";
+                b.style.cssText = "background:#fff3cd;border:2px solid #d2691e;padding:10px;margin-bottom:10px;border-radius:6px;font-size:13px";
+                b.innerHTML = '<strong>Editing Quotation ' + q.quote_no + '</strong> &nbsp; ' +
+                    '<button onclick="saveEditedQuotation()" style="background:#2e7d32;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:10px">Save Changes</button>' +
+                    '<button onclick="cancelEditQuotation()" style="background:#d32f2f;color:white;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px">Cancel</button>';
+                const posView = document.getElementById("pos");
+                if (posView) posView.insertBefore(b, posView.firstChild);
+            }
+        }, 200);
+    } catch (e) {
+        showError(e);
+    }
+}
+
+function cancelEditQuotation() {
+    editingQuoteId = null;
+    cart = [];
+    discount = 0;
+    const d = document.getElementById("discountInput");
+    if (d) d.value = 0;
+    updateCart();
+    const b = document.getElementById("editQuoteBanner");
+    if (b) b.remove();
+}
+
+async function saveEditedQuotation() {
+    if (!editingQuoteId) { alert("No quotation being edited."); return; }
+    if (cart.length === 0) { alert("Cart is empty."); return; }
+    try {
+        const payload = {
+            items: cart.map(i => ({
+                product_id: i.product_id,
+                quantity: i.quantity,
+                unit_price: i.unit_price,
+            })),
+            discount: discount,
+            notes: "",
+        };
+        const r = await apiCall("/quotations/" + editingQuoteId, "PUT", payload);
+        showSuccess("Quotation " + r.quote_no + " updated.");
+        cancelEditQuotation();
         loadQuotations();
     } catch (e) {
         showError(e);
