@@ -10,9 +10,30 @@ router = APIRouter()
 
 
 def generate_quote_no(db: Session) -> str:
+    """Find the highest existing quote number for today and add 1."""
     today = datetime.now().strftime("%Y%m%d")
-    count = db.query(Quotation).filter(Quotation.quote_no.like(f"QTE-{today}-%")).count()
-    return f"QTE-{today}-{count + 1:04d}"
+    prefix = f"QTE-{today}-"
+    existing = (
+        db.query(Quotation.quote_no)
+        .filter(Quotation.quote_no.like(prefix + "%"))
+        .all()
+    )
+    max_n = 0
+    for (qn,) in existing:
+        try:
+            n = int(qn.replace(prefix, ""))
+            if n > max_n:
+                max_n = n
+        except ValueError:
+            pass
+    # Also loop until we find a genuinely unused number (belt + suspenders)
+    candidate = max_n + 1
+    while True:
+        qn = f"QTE-{today}-{candidate:04d}"
+        exists = db.query(Quotation).filter(Quotation.quote_no == qn).first()
+        if not exists:
+            return qn
+        candidate += 1
 
 
 class QuoteItemIn(BaseModel):

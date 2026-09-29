@@ -1275,7 +1275,8 @@ async function loadDashboard() {
     }
     // Also refresh low-stock alerts so the dashboard shows them on load
     try {
-        if (typeof loadLowStock === "function") {
+        const user = authManager.getUser();
+        if (user && (user.role === "admin" || user.role === "manager") && typeof loadLowStock === "function") {
             await loadLowStock();
         }
     } catch (err) {
