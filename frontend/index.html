@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=5.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.3">
 </head>
 <body>
     <div class="dashboard-container">
@@ -87,7 +87,7 @@
             <!-- ============================== PRODUCTS ============================== -->
             <div id="products" class="view" style="display:none;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:20px"><h2>Products</h2><button class="btn btn-primary" onclick="openProductModal()" style="width:auto;padding:10px 20px">Add Product</button></div>
-                <div class="data-table"><table style="width:100%"><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Category</th><th>Price</th><th>Tax</th><th>Stock</th><th>Alert â‰¤</th><th>Actions</th></tr></thead><tbody id="productsTableBody"></tbody></table></div>
+                <div class="data-table"><table style="width:100%"><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Category</th><th>Price</th><th>Tax</th><th>Stock</th><th>Alert &le;</th><th>Actions</th></tr></thead><tbody id="productsTableBody"></tbody></table></div>
             </div>
 
             <!-- ============================== CATEGORIES ============================== -->
@@ -343,11 +343,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=5.1"></script>
-    <script src="/static/js/app.js?v=5.1"></script>
-    <script src="/static/js/main.js?v=5.1"></script>
-    <script src="/static/js/analytics.js?v=5.1"></script>
-    <script src="/static/js/tax.js?v=5.1"></script>
+    <script src="/static/js/auth.js?v=5.3"></script>
+    <script src="/static/js/app.js?v=5.3"></script>
+    <script src="/static/js/main.js?v=5.3"></script>
+    <script src="/static/js/analytics.js?v=5.3"></script>
+    <script src="/static/js/tax.js?v=5.3"></script>
 
     <!-- ============================== MODALS ============================== -->
 
@@ -391,7 +391,7 @@
         <div class="form-group"><label>Cost (KSh)</label><input type="number" id="productCost" step="0.01"></div>
         <div class="form-group"><label>Tax Status</label><select id="productTaxRate"><option value="16">A - Taxable</option><option value="0">B - Non-Taxable</option></select></div>
         <div class="form-group"><label>Stock</label><input type="number" id="productStock" value="0" required></div>
-        <div class="form-group"><label>Low Stock Alert (warn when stock â‰¤ this)</label><input type="number" id="productLowStockAlert" value="5" min="0"></div>
+        <div class="form-group"><label>Low Stock Alert (warn when stock &le; this)</label><input type="number" id="productLowStockAlert" value="5" min="0"></div>
         <div class="form-group"><label>Expiry Date</label><input type="date" id="productExpiry"></div>
         <div style="display:flex;gap:10px"><button type="submit" class="btn btn-primary" style="flex:1">Add</button><button type="button" class="btn btn-danger" onclick="closeModal(&#39;productModal&#39;)" style="flex:1">Cancel</button></div>
     </form></div></div>
@@ -407,7 +407,7 @@
         <div class="form-group"><label>Cost (KSh)</label><input type="number" id="editProductCost" step="0.01"></div>
         <div class="form-group"><label>Tax Status</label><select id="editProductTaxRate"><option value="16">A - Taxable</option><option value="0">B - Non-Taxable</option></select></div>
         <div class="form-group"><label>Stock</label><input type="number" id="editProductStock" required></div>
-        <div class="form-group"><label>Low Stock Alert (warn when stock â‰¤ this)</label><input type="number" id="editProductLowStockAlert" value="5" min="0"></div>
+        <div class="form-group"><label>Low Stock Alert (warn when stock &le; this)</label><input type="number" id="editProductLowStockAlert" value="5" min="0"></div>
         <div class="form-group"><label>Expiry Date</label><input type="date" id="editProductExpiry"></div>
         <div style="display:flex;gap:10px"><button type="submit" class="btn btn-primary" style="flex:1">Save</button><button type="button" class="btn btn-danger" onclick="closeModal(&#39;editProductModal&#39;)" style="flex:1">Cancel</button></div>
     </form></div></div>

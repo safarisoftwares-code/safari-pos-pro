@@ -181,7 +181,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const user = authManager.getUser();
 
     if (user && user.role === "cashier") {
-        const restricted = ["Products", "Categories", "Users", "Reports", "Analytics", "Tax", "Purchase Orders", "Backup", "Settings"];
+        const restricted = ["Products", "Categories", "Users", "Reports", "Analytics", "Tax", "Purchase Orders", "Backup", "Settings", "Print Queue"];
         document.querySelectorAll(".sidebar-menu a").forEach(a => {
             if (restricted.includes(a.textContent.trim())) {
                 a.style.display = "none";
