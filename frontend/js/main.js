@@ -95,7 +95,7 @@ async function apiCall(url, method, data) {
 function showView(viewName) {
     const user = authManager.getUser();
     if (user && user.role === "cashier") {
-        const allowed = ["dashboard", "pos", "receipts", "quotations"];
+        const allowed = ["dashboard", "pos", "receipts", "quotations", "calculator"];
         if (!allowed.includes(viewName)) {
             alert("Access denied.");
             return;
@@ -138,6 +138,7 @@ function showView(viewName) {
           },
         receipts: () => typeof loadReceiptHistory === "function" && loadReceiptHistory(),
         quotations: () => typeof loadQuotations === "function" && loadQuotations(),
+        calculator: () => { const el = document.getElementById("calcDisplay"); if (el) el.value = "0"; },
         purchaseOrders: () => typeof loadPurchaseOrders === "function" && loadPurchaseOrders(),
         suppliers: () => typeof loadSuppliers === "function" && loadSuppliers(),
         settings: () => {
@@ -3133,6 +3134,74 @@ async function saveEditedQuotation() {
         loadQuotations();
     } catch (e) {
         showError(e);
+    }
+}
+
+// ============================================================
+//  Cashier Calculator
+// ============================================================
+let _calcExpr = "";
+
+function _calcUpdate() {
+    const el = document.getElementById("calcDisplay");
+    if (el) el.value = _calcExpr || "0";
+}
+
+function calcPress(ch) {
+    // Prevent double operators
+    const ops = "+-*/";
+    if (ops.includes(ch) && _calcExpr.length > 0 && ops.includes(_calcExpr.slice(-1))) {
+        _calcExpr = _calcExpr.slice(0, -1);
+    }
+    _calcExpr += ch;
+    _calcUpdate();
+}
+
+function calcClear() {
+    _calcExpr = "";
+    _calcUpdate();
+}
+
+function calcBackspace() {
+    _calcExpr = _calcExpr.slice(0, -1);
+    _calcUpdate();
+}
+
+function calcEquals() {
+    if (!_calcExpr) return;
+    try {
+        const safe = _calcExpr.replace(/[^0-9+\-*/(). ]/g, "");
+        const result = Function("'use strict'; return (" + safe + ")")();
+        if (typeof result === "number" && isFinite(result)) {
+            _calcExpr = String(Math.round(result * 100) / 100);
+        } else {
+            _calcExpr = "ERR";
+        }
+    } catch (e) {
+        _calcExpr = "ERR";
+    }
+    _calcUpdate();
+}
+
+// Cashier-only: reveal Calculator sidebar item
+document.addEventListener("DOMContentLoaded", () => {
+    const user = authManager.getUser();
+    if (user && user.role === "cashier") {
+        const el = document.getElementById("calcSidebarItem");
+        if (el) el.style.display = "";
+    }
+});
+
+function toggleSidebarCalc() {
+    const panel = document.getElementById("sidebarCalcPanel");
+    const icon = document.getElementById("calcToggleIcon");
+    if (!panel) return;
+    if (panel.style.display === "none" || !panel.style.display) {
+        panel.style.display = "block";
+        if (icon) icon.innerHTML = "&#9650;";
+    } else {
+        panel.style.display = "none";
+        if (icon) icon.innerHTML = "&#9660;";
     }
 }
 

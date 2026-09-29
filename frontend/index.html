@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Safari POS Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=5.5">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.8">
 </head>
 <body>
     <div class="dashboard-container">
@@ -25,6 +25,52 @@
                 <li><a onclick="showView(&#39;printQueue&#39;)">Print Queue</a></li>
                 <li><a onclick="showView(&#39;receipts&#39;)">Receipts</a></li>
                 <li><a onclick="showView(&#39;quotations&#39;)">Quotations</a></li>
+                <li id="calcSidebarItem" style="display:none">
+                    <a onclick="toggleSidebarCalc()" style="cursor:pointer">Calculator <span id="calcToggleIcon" style="float:right">&#9660;</span></a>
+                    <div id="sidebarCalcPanel" style="display:none;margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:6px">
+                        <input type="text" id="calcDisplay" readonly value="0"
+                               style="width:100%;padding:6px;font-size:14px;text-align:right;
+                                      border:1px solid #ffd700;border-radius:4px;background:#1a1a1a;
+                                      color:#fff;font-family:Consolas,monospace;box-sizing:border-box;margin-bottom:6px">
+                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px">
+                            <button onclick="calcPress('7')" class="sc-btn">7</button>
+                            <button onclick="calcPress('8')" class="sc-btn">8</button>
+                            <button onclick="calcPress('9')" class="sc-btn">9</button>
+                            <button onclick="calcPress('/')" class="sc-btn sc-op">/</button>
+
+                            <button onclick="calcPress('4')" class="sc-btn">4</button>
+                            <button onclick="calcPress('5')" class="sc-btn">5</button>
+                            <button onclick="calcPress('6')" class="sc-btn">6</button>
+                            <button onclick="calcPress('*')" class="sc-btn sc-op">&times;</button>
+
+                            <button onclick="calcPress('1')" class="sc-btn">1</button>
+                            <button onclick="calcPress('2')" class="sc-btn">2</button>
+                            <button onclick="calcPress('3')" class="sc-btn">3</button>
+                            <button onclick="calcPress('-')" class="sc-btn sc-op">&minus;</button>
+
+                            <button onclick="calcPress('0')" class="sc-btn">0</button>
+                            <button onclick="calcPress('.')" class="sc-btn">.</button>
+                            <button onclick="calcEquals()" class="sc-btn sc-eq">=</button>
+                            <button onclick="calcPress('+')" class="sc-btn sc-op">+</button>
+                        </div>
+                        <div style="display:flex;gap:3px;margin-top:4px">
+                            <button onclick="calcClear()" class="sc-btn sc-clr" style="flex:2">CLEAR</button>
+                            <button onclick="calcBackspace()" class="sc-btn sc-bksp" style="flex:1">&#8592;</button>
+                        </div>
+                        <style>
+                            .sc-btn{padding:6px 0;font-size:12px;font-weight:bold;background:#6b3410;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit}
+                            .sc-btn:hover{background:#8b4513}
+                            .sc-op{background:#d2691e}
+                            .sc-op:hover{background:#e07a2c}
+                            .sc-eq{background:#2e7d32}
+                            .sc-eq:hover{background:#3a9640}
+                            .sc-clr{background:#d32f2f;font-size:10px}
+                            .sc-clr:hover{background:#e03535}
+                            .sc-bksp{background:#666;font-size:14px}
+                            .sc-bksp:hover{background:#888}
+                        </style>
+                    </div>
+                </li>
                 <li><a onclick="showView(&#39;purchaseOrders&#39;)">Purchase Orders</a></li>
                                 <li><a onclick="showView(&#39;backup&#39;)">Backup</a></li>
                 <li><a onclick="showView(&#39;settings&#39;)">Settings</a></li>
@@ -343,11 +389,11 @@
         </div>
     </div>
 
-    <script src="/static/js/auth.js?v=5.5"></script>
-    <script src="/static/js/app.js?v=5.5"></script>
-    <script src="/static/js/main.js?v=5.5"></script>
-    <script src="/static/js/analytics.js?v=5.5"></script>
-    <script src="/static/js/tax.js?v=5.5"></script>
+    <script src="/static/js/auth.js?v=5.8"></script>
+    <script src="/static/js/app.js?v=5.8"></script>
+    <script src="/static/js/main.js?v=5.8"></script>
+    <script src="/static/js/analytics.js?v=5.8"></script>
+    <script src="/static/js/tax.js?v=5.8"></script>
 
     <!-- ============================== MODALS ============================== -->
 
