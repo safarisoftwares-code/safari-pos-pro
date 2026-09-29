@@ -142,3 +142,7 @@ _dump*.py
 database/*.OLD_*
 database/*.PRE-*
 database/*.BROKEN_*
+
+database/*.CORRUPT_*
+database/*.OLD_*
+database/*.BROKEN_*
