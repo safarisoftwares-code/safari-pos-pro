@@ -3060,22 +3060,32 @@ let editingQuoteId = null;
 
 async function editQuotation(quoteId) {
     try {
+        // Ensure catalog is current before building the cart
+        try {
+            products = await apiCall("/products");
+        } catch (_) {}
+
         const q = await apiCall("/quotations/" + quoteId);
-        // Load into cart
+        // Load into cart, using CURRENT catalog prices (not stored quote prices)
         cart = q.items.map(it => {
             const prod = products.find(p => p.name === it.product_name);
+            const currentPrice = prod ? prod.price : it.unit_price;
+            const currentTax = prod ? (prod.tax_rate || 0) : (it.tax_rate || 0);
             return {
                 product_id: prod ? prod.id : null,
                 name: it.product_name,
-                unit: it.unit,
+                unit: prod ? prod.unit : it.unit,
                 quantity: it.quantity,
-                unit_price: it.unit_price,
-                tax_rate: it.tax_rate || 0,
+                unit_price: currentPrice,
+                tax_rate: currentTax,
                 stock: prod ? prod.stock : 0,
             };
         });
-        if (cart.some(i => i.product_id === null)) {
-            alert("Some products in this quote were deleted from the catalog. They will be removed when you save.");
+        const dropped = cart.filter(i => i.product_id === null);
+        if (dropped.length > 0) {
+            alert("Some products in this quote were deleted from the catalog:\n" +
+                  dropped.map(i => "  - " + i.name).join("\n") +
+                  "\nThey will be removed when you save.");
             cart = cart.filter(i => i.product_id !== null);
         }
         discount = q.discount || 0;

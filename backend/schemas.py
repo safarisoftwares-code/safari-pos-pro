@@ -74,6 +74,7 @@ class ProductResponse(BaseModel):
     unit: Optional[str] = None
     category_id: Optional[int] = None
     price: float
+    cost: Optional[float] = None
     tax_rate: Optional[float] = 0
     expiry_date: Optional[str] = None
     stock: int
